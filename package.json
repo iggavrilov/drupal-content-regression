@@ -1,0 +1,24 @@
+{
+  "name": "drupal-content-regression",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Safe Playwright and TypeScript regression framework for Drupal content and publishing workflows.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "setup:media": "playwright test tests/media-fixture-setup.spec.ts --project=chromium",
+    "test:content-regression": "playwright test --config=playwright.content-regression.config.ts",
+    "test:content-regression:headed": "playwright test --config=playwright.content-regression.config.ts --headed",
+    "test:publishing-regression": "playwright test --config=playwright.publishing.config.ts",
+    "test:publishing-regression:headed": "playwright test --config=playwright.publishing.config.ts --headed",
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^24.3.0",
+    "dotenv": "^17.2.1",
+    "typescript": "^5.9.2"
+  }
+}

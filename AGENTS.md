@@ -1,0 +1,25 @@
+# Permanent project instructions
+
+- Never commit credentials, cookies, tokens, passwords, phone numbers, emails, or other private values.
+- Never commit `.env`.
+- Never run Drupal write tests on production.
+- Never run destructive Drupal operations unless explicitly requested.
+- Never delete existing Drupal content.
+- Only modify exact `QA-AUTOMATED-`-owned nodes whose identity has been proven.
+- Never choose arbitrary Drupal media, taxonomy terms, or references.
+- Never run tests against production unless the user explicitly authorizes that specific run.
+- All content created by this automation framework must use the `QA-AUTOMATED-` prefix.
+- Prefer reusable Drupal field handlers rather than hardcoding complete flows for individual content types.
+- Keep tests deterministic and provide useful failure diagnostics.
+- Do not silently weaken assertions just to make tests pass.
+- Never blindly rerun creation after a save may have succeeded; recover the exact owned node instead.
+- Sanitize diagnostic URLs by removing query strings and fragments.
+- Never publish Drupal content without explicit `DRUPAL_ALLOW_PUBLISH=true`.
+- Publishing remains prohibited on production regardless of opt-in.
+- Never publish arbitrary existing nodes.
+- Only publish exact `QA-AUTOMATED-` nodes from a known regression run.
+- Never weaken moderation or ownership checks to make publishing pass.
+- Never bypass Drupal workflow permissions.
+- Never introduce a more privileged account without explicit authorization.
+- Treat unavailable transitions according to configured role expectations.
+- Do not convert blocked workflow states into false passing publication results.
