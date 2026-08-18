@@ -8,6 +8,7 @@ import {
   NetworkMonitor,
 } from '../src/diagnostics/network-monitor';
 import { inspectOwnedNodeModeration } from '../src/publishing/moderation-workflow';
+import { moderationSelectors } from '../src/publishing/moderation-workflow';
 import { loadPublishingSourceNodes } from '../src/publishing/source-nodes';
 
 test('publishing transitions can be inspected without changing moderation', async ({
@@ -29,12 +30,7 @@ test('publishing transitions can be inspected without changing moderation', asyn
         (candidate) => candidate.machineName === source.machineName,
       );
       expect(config, `Expected configuration for ${source.machineName}`).toBeDefined();
-      const inspection = await inspectOwnedNodeModeration(
-        page,
-        config!,
-        source,
-        'Draft',
-      );
+      const inspection = await inspectOwnedNodeModeration(page, config!, source);
       monitor.assertNoServerErrors();
       await assertNoDrupalFatalPage(page);
       results.push({
@@ -45,6 +41,9 @@ test('publishing transitions can be inspected without changing moderation', asyn
         availableTransitions: inspection.options
           .filter((option) => !option.disabled && !option.selected)
           .map(({ label, value }) => ({ label, value })),
+        selectors: moderationSelectors,
+        logMessageRequired: inspection.logMessageRequired,
+        assignments: inspection.assignmentControls,
       });
     }
     console.log(`Publishing workflow discovery: ${JSON.stringify(results)}`);

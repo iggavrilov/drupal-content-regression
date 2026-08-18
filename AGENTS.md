@@ -23,3 +23,12 @@
 - Never introduce a more privileged account without explicit authorization.
 - Treat unavailable transitions according to configured role expectations.
 - Do not convert blocked workflow states into false passing publication results.
+- Never assume Published must immediately follow In review; discover exact available workflow transitions.
+- Never bypass required workflow assignment fields.
+- Never hardcode personal Drupal user IDs or usernames.
+- Never select an arbitrary or ambiguous autocomplete user.
+- Never classify an unavailable Published option as a permission failure until the node reaches the state where Published is expected.
+- Never assume autocomplete search text equals the resolved Drupal entity label.
+- Always verify the exact expected resolved workflow-assignee identity.
+- Never log workflow-assignee labels or IDs from local environment configuration.
+- Require the configured digits-only workflow-assignee entity ID to match Drupal's post-selection value exactly.

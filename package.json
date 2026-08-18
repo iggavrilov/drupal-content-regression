@@ -12,6 +12,7 @@
     "test:content-regression:headed": "playwright test --config=playwright.content-regression.config.ts --headed",
     "test:publishing-regression": "playwright test --config=playwright.publishing.config.ts",
     "test:publishing-regression:headed": "playwright test --config=playwright.publishing.config.ts --headed",
+    "test:publishing-post-run-verification": "playwright test tests/publishing-post-run-verification.spec.ts --project=chromium",
     "report": "playwright show-report",
     "typecheck": "tsc --noEmit"
   },

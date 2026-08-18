@@ -19,6 +19,12 @@ export function assertPublishingAllowed(): string {
       'PUBLISHING_BLOCKED: DRUPAL_ALLOW_PUBLISH=true is required before publishing browser execution.',
     );
   }
+  if (!process.env.DRUPAL_WORKFLOW_ASSIGNEE_SEARCH?.trim() || !process.env.DRUPAL_WORKFLOW_ASSIGNEE_EXPECTED?.trim() || !process.env.DRUPAL_WORKFLOW_ASSIGNEE_ID?.trim()) {
+    throw new Error('PUBLISHING_BLOCKED: Workflow assignee search, expected label, and expected numeric ID are required before publishing browser execution.');
+  }
+  if (!/^\d+$/.test(process.env.DRUPAL_WORKFLOW_ASSIGNEE_ID.trim())) {
+    throw new Error('PUBLISHING_BLOCKED: Workflow assignee ID must contain digits only.');
+  }
   return environment;
 }
 

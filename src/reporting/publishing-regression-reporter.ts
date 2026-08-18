@@ -15,6 +15,11 @@ interface TransitionResult {
   to: string;
   value?: string;
   status: 'passed' | 'failed' | 'blocked';
+  assignmentRequired?: boolean;
+  assignmentResult?: 'not required' | 'resolved' | 'blocked';
+  logMessageResult?: 'populated' | 'not required' | 'blocked';
+  assignmentExactLabelVerified?: boolean;
+  assignmentNumericIdVerified?: boolean;
 }
 
 interface PublishingResult {
@@ -48,6 +53,11 @@ interface PublishingEvent {
   available?: boolean;
   publicPageLoaded?: boolean;
   reason?: string;
+  assignmentRequired?: boolean;
+  assignmentResult?: 'not required' | 'resolved' | 'blocked';
+  logMessageResult?: 'populated' | 'not required' | 'blocked';
+  assignmentExactLabelVerified?: boolean;
+  assignmentNumericIdVerified?: boolean;
 }
 
 const orderedTypes = [
@@ -73,11 +83,11 @@ export function publishingMetadataForTestTitle(
 export function classifyPublishingResult(
   playwrightStatus: TestResult['status'],
   error: string,
-  publishedAvailable: boolean | undefined,
+  blockedReason: string | undefined,
 ): ResultStatus {
   if (playwrightStatus === 'passed') return 'passed';
   if (
-    (playwrightStatus === 'skipped' && publishedAvailable === false) ||
+    (playwrightStatus === 'skipped' && Boolean(blockedReason)) ||
     /PUBLISHING_BLOCKED:/i.test(error)
   ) {
     return 'blocked';
@@ -167,8 +177,17 @@ export default class PublishingRegressionReporter implements Reporter {
             to: event.to,
             value: event.value,
             status: event.status ?? 'passed',
+            assignmentRequired: event.assignmentRequired,
+            assignmentResult: event.assignmentResult,
+            logMessageResult: event.logMessageResult,
+            assignmentExactLabelVerified: event.assignmentExactLabelVerified,
+            assignmentNumericIdVerified: event.assignmentNumericIdVerified,
           });
           publishingResult.finalState = event.to;
+          if (event.to === 'Published') {
+            publishingResult.publishedTransitionAvailable = true;
+            publishingResult.publishedTransitionValue = event.value;
+          }
         }
         if (event.type === 'availability' && event.target === 'Published') {
           publishingResult.publishedTransitionAvailable = event.available;
@@ -177,6 +196,17 @@ export default class PublishingRegressionReporter implements Reporter {
         if (event.type === 'blocked') {
           publishingResult.finalState = event.state;
           publishingResult.blockedReason = event.reason;
+          if (event.state && event.target) {
+            publishingResult.transitions.push({
+              from: event.state,
+              to: event.target,
+              status: 'blocked',
+              assignmentResult: /assign|user/i.test(event.reason ?? '') ? 'blocked' : undefined,
+            });
+          }
+          if (event.state === 'Reviewed and approved' && event.target === 'Published') {
+            publishingResult.publishedTransitionAvailable = false;
+          }
         }
         if (event.type === 'final') {
           publishingResult.finalState = event.state;
@@ -190,11 +220,11 @@ export default class PublishingRegressionReporter implements Reporter {
     publishingResult.status = classifyPublishingResult(
       result.status,
       error,
-      publishingResult.publishedTransitionAvailable,
+      publishingResult.blockedReason,
     );
     if (publishingResult.status === 'blocked') {
       publishingResult.blockedReason ??=
-        'Published transition unavailable to automation user';
+        'Required workflow capability or assignment is unavailable.';
       publishingResult.reason = undefined;
     }
     this.results.set(machineName, publishingResult);
@@ -233,15 +263,8 @@ export default class PublishingRegressionReporter implements Reporter {
         )
           ? 'supported'
           : 'mixed',
-      inReviewToPublished: results.every(
-        (entry) => entry.publishedTransitionAvailable === false,
-      )
-        ? 'not permitted'
-        : results.every(
-              (entry) => entry.publishedTransitionAvailable === true,
-            )
-          ? 'supported'
-          : 'mixed',
+      inReviewToApproved: results.every((entry) => entry.transitions.some((transition) => transition.from === 'In review' && transition.to === 'Reviewed and approved' && transition.status === 'passed')) ? 'supported' : 'mixed',
+      approvedToPublished: results.every((entry) => entry.transitions.some((transition) => transition.from === 'Reviewed and approved' && transition.to === 'Published' && transition.status === 'passed')) ? 'supported' : 'mixed',
     };
     const report = {
       environment,
@@ -265,7 +288,8 @@ export default class PublishingRegressionReporter implements Reporter {
       '## Publishing capability',
       '',
       `Draft → In review: ${capability.draftToInReview}`,
-      `In review → Published: ${capability.inReviewToPublished}`,
+      `In review → Reviewed and approved: ${capability.inReviewToApproved}`,
+      `Reviewed and approved → Published: ${capability.approvedToPublished}`,
       '',
       ...results.flatMap((entry) => [
         `## ${entry.label}`,
@@ -276,7 +300,7 @@ export default class PublishingRegressionReporter implements Reporter {
         ...(entry.transitions.length > 0
           ? entry.transitions.map(
               (transition) =>
-                `${transition.from} → ${transition.to}: ${transition.status.toUpperCase()}${transition.value ? ` (value: ${transition.value})` : ''}`,
+                `${transition.from} → ${transition.to}: ${transition.status.toUpperCase()}${transition.value ? ` (value: ${transition.value})` : ''}; log: ${transition.logMessageResult ?? 'not recorded'}${transition.assignmentRequired ? `; assignment: ${transition.assignmentResult ?? 'unknown'}; exact label: ${transition.assignmentExactLabelVerified ? 'verified' : 'not verified'}; numeric ID: ${transition.assignmentNumericIdVerified ? 'verified' : 'not verified'}` : '; assignment: not required'}`,
             )
           : ['Transitions: none']),
         `Final state: ${entry.finalState ?? 'not reached'}`,

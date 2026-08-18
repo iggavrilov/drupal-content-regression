@@ -155,25 +155,23 @@ manifest for the current environment, then re-verifies each numeric node ID,
 exact `QA-AUTOMATED-` title, content-type form, and expected moderation state
 before every transition.
 
-Read-only discovery in the current environment found that all seven supported
-content types expose `Draft → In review` (machine value `review`) and do not
-expose a direct Published transition from Draft. At execution time, the suite
-persists and verifies In review, reopens the same exact node, and then discovers
-whether the automation user has an exact Published transition. If not, the
-content type is reported as an expected blocked capability without bypassing
-permissions. This can reflect role permissions, workflow-transition permission,
-or project editorial policy; it is not automatically classified as a Drupal
-defect. If Published is available, it is selected by its actual option value,
-saved once, reopened, and verified.
+Read-only and manual discovery in the current project/environment established a
+four-state workflow. The runner opens the exact node view, reads the available
+transition labels and machine values, and follows the configured proven path.
+It never selects an option by position. Required log and assignment controls
+are discovered within the node-view moderation form and satisfied before the
+form is applied exactly once.
 
-The currently proven automation-role workflow is:
+The currently observed project workflow is:
 
 ```text
 Draft
   ↓
 In review
   ↓
-Published unavailable
+Reviewed and approved
+  ↓
+Published
 ```
 
 The first controlled publishing run successfully demonstrated this capability
@@ -188,6 +186,9 @@ an additional local opt-in:
 DRUPAL_ENVIRONMENT=develop
 DRUPAL_ALLOW_PUBLISH=true
 DRUPAL_EXPECT_PUBLISH_PERMISSION=false
+DRUPAL_WORKFLOW_ASSIGNEE_SEARCH=qa.publisher
+DRUPAL_WORKFLOW_ASSIGNEE_EXPECTED=qa.publisher
+DRUPAL_WORKFLOW_ASSIGNEE_ID=12345
 ```
 
 The default in `.env.example` is false. `prod`, `production`, missing, and
@@ -196,13 +197,22 @@ suite uses one worker and no retries, changes only moderation, and never runs
 nodes concurrently.
 
 `DRUPAL_ALLOW_PUBLISH` authorizes the automation to attempt the workflow.
-`DRUPAL_EXPECT_PUBLISH_PERMISSION` describes the expected Drupal role
-capability and defaults to false. With the default, a successful Draft → In
-review transition followed by an unavailable Published transition is reported
-as BLOCKED, and Playwright marks the internal test skipped so a blocked-only run
-can exit successfully. It is never reported as a passed publication. When the
-expectation is true, an unavailable Published transition is a regression and
-the command exits unsuccessfully.
+`DRUPAL_WORKFLOW_ASSIGNEE_SEARCH` is the text Playwright types into required
+reviewer, publisher, and publication-notification autocomplete widgets.
+`DRUPAL_WORKFLOW_ASSIGNEE_EXPECTED` is the exact username-only label Drupal
+renders in its suggestion list. `DRUPAL_WORKFLOW_ASSIGNEE_ID` is the digits-only
+entity ID that Drupal must append after the exact suggestion is selected. Search
+text is never assumed to equal the rendered label. The automation requires one
+exact label match, then independently verifies both the username and numeric ID
+in Drupal's transformed input value. Local values are never written to reports
+or source control. The former single `DRUPAL_WORKFLOW_ASSIGNEE` variable is no
+longer supported, and publishing refuses to start without all three values.
+
+`DRUPAL_EXPECT_PUBLISH_PERMISSION` describes the expected capability only at
+the `Reviewed and approved → Published` stage. An absent Published option while
+the node is merely In review is never interpreted as a permission limitation.
+Unavailable required intermediate transitions or unresolved assignment fields
+are BLOCKED; server errors, fatal pages, and persistence failures are FAILED.
 
 A possible future architecture may use separate explicitly authorized local
 accounts: an editor/creator account submits nodes for review and a publisher
