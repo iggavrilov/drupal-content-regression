@@ -75,6 +75,7 @@ Write and publishing suites are prohibited on production. Static validation is a
 - `npm run typecheck` validates TypeScript without emitting files.
 - `npm run test:content-regression` runs only the seven supported CRUD tests.
 - `npm run test:content-regression:headed` runs the same safe suite with a visible browser.
+- `npm run test:paragraph-regression` runs the dedicated four-component Paragraph lifecycle with one worker and no retries.
 
 ## Consolidated content regression
 
@@ -138,6 +139,38 @@ npx playwright test tests/insight-external-crud.spec.ts --project=chromium
 npx playwright test tests/insight-crud.spec.ts --project=chromium
 npx playwright test tests/insight-search-crud.spec.ts --project=chromium
 ```
+
+## Paragraph regression
+
+The first supported Paragraph milestone covers exactly these components on an
+automation-owned Insight Search Filter Page Draft host:
+
+- Insights overview (the single fieldless default instance)
+- Anchor
+- Jump nav
+- Formatted text
+
+The dedicated suite creates one unique `QA-AUTOMATED-` host, performs an initial
+Save, verifies all four persisted Paragraphs, updates the three editable saved
+Paragraphs, performs a second Save, and verifies the final persisted state. It
+uses one worker, zero retries, exact inventory checks, HTTP 500–505 monitoring,
+Drupal fatal-page detection, and Draft-only ownership safeguards.
+
+Saved Paragraph rows are rediscovered after Drupal AJAX rerenders. Their exact
+semantic Edit controls use normal Playwright pointer activation when unobstructed
+and verified focus plus keyboard Enter when the Drupal control is structurally
+overlapped. The production path does not use force-click, DOM click, synthetic
+events, JavaScript submission, or direct Drupal AJAX calls.
+
+Run only this lifecycle with:
+
+```bash
+npm run test:paragraph-regression
+```
+
+Secondary footer, nested Blocks, media- or reference-dependent Paragraphs, and
+other complex Paragraph types remain deferred and are not supported by the
+normal Paragraph regression suite.
 
 ## Publishing workflow regression
 

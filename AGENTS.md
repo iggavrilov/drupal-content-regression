@@ -32,3 +32,11 @@
 - Always verify the exact expected resolved workflow-assignee identity.
 - Never log workflow-assignee labels or IDs from local environment configuration.
 - Require the configured digits-only workflow-assignee entity ID to match Drupal's post-selection value exactly.
+- Never modify arbitrary existing content; normal Paragraph tests create their own uniquely titled `QA-AUTOMATED-` Draft host.
+- Existing regression nodes are historical evidence and are never reusable mutation targets.
+- Reuse exactly one fieldless default Paragraph when expected; never duplicate it.
+- Rediscover saved Paragraph rows, current deltas, and controls after Drupal AJAX rerenders.
+- Never retain stale locators across saved Paragraph expansions.
+- Keyboard fallback requires one exact, visible, enabled semantic Paragraph Edit control and verified focus ownership.
+- Never force-click a Paragraph AJAX Edit control or bypass it through DOM click, synthetic events, direct Drupal AJAX, or JavaScript form submission.
+- Never automatically rerun a Paragraph or other write suite after failure.
