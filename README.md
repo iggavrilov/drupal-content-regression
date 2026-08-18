@@ -76,6 +76,10 @@ Write and publishing suites are prohibited on production. Static validation is a
 - `npm run test:content-regression` runs only the seven supported CRUD tests.
 - `npm run test:content-regression:headed` runs the same safe suite with a visible browser.
 - `npm run test:paragraph-regression` runs the dedicated four-component Paragraph lifecycle with one worker and no retries.
+- `npm run test:paragraph-m2-regression` runs only the image-background Milestone 2 lifecycle.
+- `npm run test:paragraph-m3-discovery` inventories Milestone 3 structures on unsaved forms without persistent Drupal writes.
+- `npm run test:paragraph-m3-blockquote` runs only the text-only Blockquote lifecycle.
+- `npm run test:paragraph-m3-blockquote-image` runs only the Blockquote optional-image lifecycle.
 
 ## Consolidated content regression
 
@@ -187,10 +191,46 @@ is not persistence proof. The image-background suite verifies the stable,
 Paragraph-local `field_media_image[selection][0][target_id]` association after
 rediscovering the current Paragraph row and delta following Drupal AJAX.
 
+Milestone 3 adds two independent focused Blockquote scenarios. The text-only
+scenario creates one owned Draft host, adds one Blockquote, saves and verifies
+the initial CKEditor text, updates only that text, saves again, and verifies the
+final persisted value. The optional-image scenario creates a separate Draft
+host, resolves exactly one `qa-automated-image.png` Media Library match, inserts
+it through the Blockquote-local trigger, and proves the stable Paragraph-local
+target ID. It then updates only the text, preserves the same media association,
+saves, and verifies both text and media again.
+
+Run the focused scenarios independently:
+
+```bash
+npm run test:paragraph-m3-blockquote
+npm run test:paragraph-m3-blockquote-image
+```
+
+Blockquote uses the `limited_text` format default. Author name, Author title,
+CTA, Style, and Color scheme are intentionally left untouched unless a future
+scenario explicitly authorizes them. Optional editorial fields are not filled
+merely to increase coverage counts. Media identity is resolved by exact fixture
+filename before the environment-specific ID is accepted, and saved ownership is
+verified through `[selection][0][target_id]`, not `media_library_selection`.
+
+The retained read-only Milestone 3 discovery uses a new unsaved Insight Search
+Filter Page form to inventory Blockquote and Featured banner structure and
+defaults. It never submits the host form and is isolated from all write-suite
+commands:
+
+```bash
+npm run test:paragraph-m3-discovery
+```
+
 Formatted text (w/ color background) remains deferred: its required color field
 defaults to invalid `_none`, and automation has no approved semantic rule for
 choosing Mid Purple, Mid Ultraviolet, Dark Gradient, or Titanium. Secondary
 footer, nested Blocks, and other complex Paragraph types also remain deferred.
+
+Featured banner also remains deferred. Its required
+`field_paragraph_border` default is invalid `_none`, and no approved semantic
+rule authorizes selecting `padding`; automation must not choose it arbitrarily.
 
 ## Publishing workflow regression
 

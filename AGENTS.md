@@ -46,3 +46,11 @@
 - Do not automate a required select or color field without a valid safe default or an approved semantic rule.
 - Match Paragraph labels containing punctuation with exact escaped boundaries rather than word-boundary shortcuts.
 - Paragraph Edit/Collapse controls may render as exact named `input` or `button` elements; require unique ownership either way.
+- Leave optional editorial fields untouched unless the authorized scenario explicitly covers them.
+- Never choose a required non-default select value merely to make a Paragraph saveable; require a valid default or an approved semantic rule.
+- Resolve Blockquote media through the exact automation-owned fixture filename before accepting an environment-specific media ID.
+- Prove persisted Paragraph media through the stable `[selection][0][target_id]` association, never the transient `media_library_selection` insertion field.
+- After any Paragraph media AJAX operation, rediscover the exact row, runtime delta, and owned controls before continuing.
+- Write suites must create their own uniquely titled `QA-AUTOMATED-` host and must never mutate historical regression nodes.
+- Never force-click, synthesize DOM events, invoke Drupal AJAX directly, or bypass semantic saved-Paragraph activation.
+- Never automatically rerun a write suite after a failure.

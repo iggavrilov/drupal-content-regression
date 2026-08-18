@@ -15,6 +15,9 @@
     "test:publishing-post-run-verification": "playwright test tests/publishing-post-run-verification.spec.ts --project=chromium",
     "test:paragraph-regression": "playwright test --config=playwright.paragraph-regression.config.ts",
     "test:paragraph-m2-regression": "playwright test --config=playwright.paragraph-m2-regression.config.ts",
+    "test:paragraph-m3-discovery": "playwright test --config=playwright.paragraph-m3-discovery.config.ts",
+    "test:paragraph-m3-blockquote": "playwright test --config=playwright.paragraph-m3-regression.config.ts",
+    "test:paragraph-m3-blockquote-image": "playwright test --config=playwright.paragraph-m3-image-regression.config.ts",
     "report": "playwright show-report",
     "typecheck": "tsc --noEmit"
   },
