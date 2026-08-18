@@ -37,6 +37,12 @@
 - Reuse exactly one fieldless default Paragraph when expected; never duplicate it.
 - Rediscover saved Paragraph rows, current deltas, and controls after Drupal AJAX rerenders.
 - Never retain stale locators across saved Paragraph expansions.
-- Keyboard fallback requires one exact, visible, enabled semantic Paragraph Edit control and verified focus ownership.
+- Keyboard fallback requires one exact, visible, enabled semantic Paragraph `input`/`button` submit control and verified focus ownership.
 - Never force-click a Paragraph AJAX Edit control or bypass it through DOM click, synthetic events, direct Drupal AJAX, or JavaScript form submission.
 - Never automatically rerun a Paragraph or other write suite after failure.
+- Never treat Media Library insertion fields such as `media_library_selection` as persisted association proof.
+- After media AJAX, rediscover the exact Paragraph row and delta and reacquire all Paragraph-local controls.
+- Resolve automation media by exact owned identity; never select the first or an arbitrary media item.
+- Do not automate a required select or color field without a valid safe default or an approved semantic rule.
+- Match Paragraph labels containing punctuation with exact escaped boundaries rather than word-boundary shortcuts.
+- Paragraph Edit/Collapse controls may render as exact named `input` or `button` elements; require unique ownership either way.

@@ -258,7 +258,7 @@ export class ParagraphRegressionRunner {
 
   private async assertExactInventory(wrapper: Locator, deltasByMachine: Map<string, string>): Promise<void> {
     if (deltasByMachine.size !== paragraphConfigs.length || new Set(deltasByMachine.values()).size !== paragraphConfigs.length) throw new Error('Unexpected duplicate or missing Paragraph delta.');
-    const actionCount = await wrapper.locator(`input[name^="field_landing_paragraphs_"][name$="_edit"], input[name^="field_landing_paragraphs_"][name$="_collapse"]`).count();
+    const actionCount = await wrapper.locator(`[name^="field_landing_paragraphs_"][name$="_edit"], [name^="field_landing_paragraphs_"][name$="_collapse"]`).count();
     if (actionCount !== paragraphConfigs.length) throw new Error(`Unexpected Paragraph count: expected ${paragraphConfigs.length}, found ${actionCount}.`);
   }
 

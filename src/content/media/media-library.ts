@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { Locator, Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import {
   AUTOMATED_CONTENT_PREFIX,
   AUTOMATED_IMAGE_FIXTURE,
@@ -168,6 +168,30 @@ export async function selectAutomationImageFixture(
   await page.locator(DIALOG_SELECTOR).filter({ visible: true }).waitFor({
     state: 'hidden',
   }).catch(() => undefined);
+  return media;
+}
+
+export async function selectAutomationImageFixtureFromTrigger(
+  page: Page,
+  trigger: Locator,
+  expectedId: string,
+): Promise<AutomationMediaMatch> {
+  if ((await trigger.count()) !== 1 || !(await trigger.isVisible()) || !(await trigger.isEnabled())) {
+    throw new Error('Paragraph Image Media Library trigger was not uniquely visible and enabled.');
+  }
+  await trigger.click();
+  const dialog = await visibleMediaDialog(page);
+  const media = await resolveAutomationImageFixture(page, dialog);
+  if (media.id !== expectedId) {
+    throw new Error(`Automation Image fixture resolved to media ${media.id}, expected ${expectedId}.`);
+  }
+  const checkbox = dialog.locator(`input[name="${media.checkboxName}"]`);
+  if ((await checkbox.count()) !== 1) throw new Error(`Automation media ${media.id} checkbox was not found uniquely.`);
+  await checkbox.check();
+  const insert = dialog.getByRole('button', { name: 'Insert selected', exact: true }).filter({ visible: true });
+  if ((await insert.count()) !== 1) throw new Error('Media Library Insert selected control was not found uniquely.');
+  await insert.click();
+  await expect(page.locator(DIALOG_SELECTOR).filter({ visible: true })).toHaveCount(0, { timeout: 15_000 });
   return media;
 }
 

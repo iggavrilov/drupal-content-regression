@@ -27,8 +27,8 @@ export async function activateOwnedParagraphEdit(control: Locator): Promise<Para
     }));
     return { tag: input.tagName.toLowerCase(), type: input.type, pointerOverlap };
   }, [...BLOCKERS]);
-  if (state.tag !== 'input' || state.type !== 'submit') {
-    throw new Error('Paragraph Edit control is not a semantic input[type="submit"].');
+  if (!['input', 'button'].includes(state.tag) || state.type !== 'submit') {
+    throw new Error('Paragraph Edit control is not a semantic input/button submit control.');
   }
   if (!state.pointerOverlap) {
     await control.click({ timeout: 5_000 });

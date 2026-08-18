@@ -142,7 +142,7 @@ npx playwright test tests/insight-search-crud.spec.ts --project=chromium
 
 ## Paragraph regression
 
-The first supported Paragraph milestone covers exactly these components on an
+Milestone 1 covers exactly these components on an
 automation-owned Insight Search Filter Page Draft host:
 
 - Insights overview (the single fieldless default instance)
@@ -168,9 +168,29 @@ Run only this lifecycle with:
 npm run test:paragraph-regression
 ```
 
-Secondary footer, nested Blocks, media- or reference-dependent Paragraphs, and
-other complex Paragraph types remain deferred and are not supported by the
-normal Paragraph regression suite.
+Milestone 2 adds a separate focused suite for Formatted text (w/ image
+background). It creates one owned Draft host, inserts the exact automation-owned
+`qa-automated-image.png` fixture, saves and verifies text/media persistence,
+updates only the Paragraph text, preserves the same media, saves again, and
+verifies final persistence. The current develop fixture is media `44706`, but
+the ID is never treated as universal: Media Library must first resolve exactly
+one filename match before the expected ID is accepted.
+
+Run the focused Milestone 2 lifecycle with:
+
+```bash
+npm run test:paragraph-m2-regression
+```
+
+Media Library's `media_library_selection` input is transient insertion state and
+is not persistence proof. The image-background suite verifies the stable,
+Paragraph-local `field_media_image[selection][0][target_id]` association after
+rediscovering the current Paragraph row and delta following Drupal AJAX.
+
+Formatted text (w/ color background) remains deferred: its required color field
+defaults to invalid `_none`, and automation has no approved semantic rule for
+choosing Mid Purple, Mid Ultraviolet, Dark Gradient, or Titanium. Secondary
+footer, nested Blocks, and other complex Paragraph types also remain deferred.
 
 ## Publishing workflow regression
 

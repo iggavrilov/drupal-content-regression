@@ -18,9 +18,9 @@ async function deltas(wrapper: Locator): Promise<string[]> {
 
 export async function findParagraphDeltasByLabel(wrapper: Locator, label: string): Promise<string[]> {
   const matches: string[] = [];
-  const pattern = new RegExp(`\\b${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+  const pattern = new RegExp(`(?:^|\\s)${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`, 'i');
   for (const delta of await deltas(wrapper)) {
-    const action = wrapper.locator(`input[name="${PARAGRAPH_FIELD}_${delta}_edit"], input[name="${PARAGRAPH_FIELD}_${delta}_collapse"]`);
+    const action = wrapper.locator(`[name="${PARAGRAPH_FIELD}_${delta}_edit"], [name="${PARAGRAPH_FIELD}_${delta}_collapse"]`);
     if ((await action.count()) !== 1) continue;
     const row = action.locator('xpath=ancestor::tr[1]');
     if ((await row.count()) === 1 && pattern.test((await row.innerText()).replace(/\s+/g, ' '))) matches.push(delta);
@@ -62,9 +62,9 @@ export async function addParagraph(page: Page, wrapper: Locator, config: Paragra
 export async function expandParagraph(wrapper: Locator, delta: string): Promise<void> {
   const owned = wrapper.locator(`[name^="${subformPrefix(delta)}"]`).filter({ visible: true });
   if (await owned.count()) return;
-  const collapse = wrapper.locator(`input[name="${PARAGRAPH_FIELD}_${delta}_collapse"]`);
+  const collapse = wrapper.locator(`[name="${PARAGRAPH_FIELD}_${delta}_collapse"]`);
   if ((await collapse.count()) === 1 && (await collapse.isVisible())) return;
-  const edit = wrapper.locator(`input[name="${PARAGRAPH_FIELD}_${delta}_edit"]`);
+  const edit = wrapper.locator(`[name="${PARAGRAPH_FIELD}_${delta}_edit"]`);
   if ((await edit.count()) !== 1 || !(await edit.isVisible())) throw new Error(`PARAGRAPH_BLOCKED: Paragraph delta ${delta} cannot be expanded uniquely.`);
   await activateOwnedParagraphEdit(edit);
   await expect.poll(() => wrapper.locator(`[name^="${subformPrefix(delta)}"]`).filter({ visible: true }).count(), { timeout: 20_000 }).toBeGreaterThan(0);
@@ -75,7 +75,7 @@ export async function expandParagraphForControl(wrapper: Locator, delta: string,
     ? wrapper.locator(controlSelector).count()
     : wrapper.locator(controlSelector).filter({ visible: true }).count();
   if (await ready()) return undefined;
-  const edit = wrapper.locator(`input[name="${PARAGRAPH_FIELD}_${delta}_edit"]`);
+  const edit = wrapper.locator(`[name="${PARAGRAPH_FIELD}_${delta}_edit"]`);
   if ((await edit.count()) !== 1 || !(await edit.isVisible()) || !(await edit.isEnabled())) throw new Error(`PARAGRAPH_BLOCKED: Paragraph delta ${delta} Edit control was not uniquely visible and enabled.`);
   const activation = await activateOwnedParagraphEdit(edit);
   await expect.poll(ready, { timeout: 20_000, message: `Expected delta ${delta} owned control to become ${state}.` }).toBeGreaterThan(0);

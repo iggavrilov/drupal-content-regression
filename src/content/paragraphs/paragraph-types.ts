@@ -72,6 +72,12 @@ export const paragraphConfigs: readonly ParagraphConfig[] = [
 
 export const deferredParagraphConfigs: readonly DeferredParagraphConfig[] = [
   {
+    machineName: 'formatted_text_with_color_bg',
+    label: 'Formatted text (w/ color background)',
+    status: 'deferred',
+    reason: 'required color field defaults to invalid _none and no safe semantic automation rule is approved',
+  },
+  {
     machineName: 'secondary_footer',
     label: 'Secondary footer',
     status: 'deferred',
