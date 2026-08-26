@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { AUTOMATED_CONTENT_PREFIX, hasAutomatedContentPrefix } from '../../config/automation';
+import { AUTOMATED_CONTENT_PREFIX, hasAutomatedContentPrefix, PROTECTED_DEVV_NODE_IDS } from '../../config/automation';
 import { insightSearchConfig } from '../../config/content-types';
 import { assertExplicitNonProductionEnvironment } from '../../config/write-safety';
 import { assertNoDrupalFatalPage, NetworkMonitor } from '../../diagnostics/network-monitor';
@@ -7,8 +7,6 @@ import { nodeIdFromEditLink, nodeIdFromUrl } from '../basic-page-form';
 import { fillOwnedEditor, readOwnedEditor, submitNodeForm, validateSafeModerationState } from '../node-form';
 import { addParagraph, expandParagraph, expandParagraphForControl, findParagraphDeltasByLabel, identifyDeltas, ownedField, PARAGRAPH_WRAPPER, radioOptions, subformPrefix } from './paragraph-utils';
 import { paragraphConfigs, type ParagraphComponentResult, type ParagraphConfig, type ParagraphRegressionResult, type RadioOption } from './paragraph-types';
-
-const PROTECTED_NODE_IDS = new Set(['24971', '24976', '24981', '24986', '24991', '24996', '25001', '25011']);
 
 interface Values { anchor: string; formatted: string; }
 
@@ -58,7 +56,7 @@ export class ParagraphRegressionRunner {
       await this.verifyHostBeforeSave(form, title);
       await this.save(page, form, 'Paragraph regression creation');
       nodeId = nodeIdFromUrl(page.url()) ?? await nodeIdFromEditLink(page);
-      if (!nodeId || !/^\d+$/.test(nodeId) || PROTECTED_NODE_IDS.has(nodeId)) throw new Error('Host save did not resolve a safe new numeric node ID.');
+      if (!nodeId || !/^\d+$/.test(nodeId) || PROTECTED_DEVV_NODE_IDS.has(nodeId)) throw new Error('Host save did not resolve a safe new numeric node ID.');
       this.event({ stage: 'host-created', nodeId, title, moderation: moderation.moderationStateUsed, saves: this.saves });
 
       let persistedDeltas = await this.openOwnedEdit(page, nodeId, title);
@@ -135,7 +133,7 @@ export class ParagraphRegressionRunner {
   }
 
   private async openOwnedEdit(page: Page, nodeId: string, title: string): Promise<Map<string, string>> {
-    if (PROTECTED_NODE_IDS.has(nodeId)) throw new Error(`Refusing to edit protected node ${nodeId}.`);
+    if (PROTECTED_DEVV_NODE_IDS.has(nodeId)) throw new Error(`Refusing to edit protected node ${nodeId}.`);
     const response = await page.goto(`/node/${nodeId}/edit`, { waitUntil: 'domcontentloaded' });
     if (!response || response.status() >= 400) throw new Error(`Owned node edit form failed with HTTP ${response?.status() ?? 'unknown'}.`);
     this.monitor.assertNoServerErrors(); await assertNoDrupalFatalPage(page);

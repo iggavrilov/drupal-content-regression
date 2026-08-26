@@ -6,7 +6,7 @@ import { ParagraphRegressionRunner } from '../src/content/paragraphs/paragraph-r
 
 test('four low-complexity Paragraphs can be created and updated on one owned Draft node', async ({ page }) => {
   test.setTimeout(300_000);
-  expect(['develop', 'staging']).toContain(assertExplicitNonProductionEnvironment());
+  expect(assertExplicitNonProductionEnvironment()).toBe('develop');
   await loginToDrupal(page, {
     username: getRequiredEnvironmentVariable('DRUPAL_USERNAME'),
     password: getRequiredEnvironmentVariable('DRUPAL_PASSWORD'),

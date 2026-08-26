@@ -1,13 +1,34 @@
 import 'dotenv/config';
 
-const ALLOWED_WRITE_ENVIRONMENTS = new Set(['develop', 'staging']);
+const ALLOWED_WRITE_ENVIRONMENT = 'develop';
+const ALLOWED_WRITE_ORIGIN = 'https://devv.leidos.com';
 
 export function assertExplicitNonProductionEnvironment(): string {
   const configured = process.env.DRUPAL_ENVIRONMENT?.trim().toLowerCase();
-  if (!configured || !ALLOWED_WRITE_ENVIRONMENTS.has(configured)) {
+  if (configured !== ALLOWED_WRITE_ENVIRONMENT) {
     throw new Error(
-      'Content regression requires DRUPAL_ENVIRONMENT to be explicitly set to develop or staging. Browser execution was stopped.',
+      'Content regression requires DRUPAL_ENVIRONMENT=develop. Browser execution was stopped.',
     );
+  }
+  const configuredBaseUrl = process.env.DRUPAL_BASE_URL?.trim();
+  let target: URL;
+  try {
+    target = new URL(configuredBaseUrl ?? '');
+  } catch {
+    throw new Error('Content regression requires a valid absolute DRUPAL_BASE_URL. Browser execution was stopped.');
+  }
+  const isCanonicalConfiguredTarget = configuredBaseUrl === ALLOWED_WRITE_ORIGIN
+    || configuredBaseUrl === `${ALLOWED_WRITE_ORIGIN}/`;
+  const isExactRootTarget = isCanonicalConfiguredTarget
+    && target.origin === ALLOWED_WRITE_ORIGIN
+    && target.protocol === 'https:'
+    && !target.username
+    && !target.password
+    && (target.pathname === '/' || target.pathname === '')
+    && !target.search
+    && !target.hash;
+  if (!isExactRootTarget) {
+    throw new Error(`Content regression writes are allowed only for ${ALLOWED_WRITE_ORIGIN}. Browser execution was stopped.`);
   }
   return configured;
 }

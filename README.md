@@ -62,9 +62,11 @@ npx playwright install chromium
 
 ## Environment setup
 
-Copy `.env.example` to `.env` and populate it locally for the target non-production environment. Never commit `.env` or private values. Authentication requires `DRUPAL_BASE_URL`, `DRUPAL_USERNAME`, and `DRUPAL_PASSWORD`. If the environment is additionally protected by HTTP Basic Auth, set both optional variables `BASIC_AUTH_USERNAME` and `BASIC_AUTH_PASSWORD`; Playwright supplies them at browser-context level.
+Copy `.env.example` to `.env` and populate it locally for the DEVV environment. Never commit `.env` or private values. Automated Drupal node creation now targets `https://devv.leidos.com` through `DRUPAL_BASE_URL`; authentication requires `DRUPAL_USERNAME` and `DRUPAL_PASSWORD`. If the environment is additionally protected by HTTP Basic Auth, set both optional variables `BASIC_AUTH_USERNAME` and `BASIC_AUTH_PASSWORD`; Playwright supplies them at browser-context level.
 
-Write and publishing suites are prohibited on production. Static validation is available with `npm run typecheck`.
+Write and publishing suites are prohibited on production. Before browser execution, the write guard requires `DRUPAL_ENVIRONMENT=develop` and the exact HTTPS root origin `https://devv.leidos.com`. Alternate hosts, lookalike subdomains, ports, URL credentials, path prefixes, query strings, and fragments fail closed. Static validation is available with `npm run typecheck`.
+
+Drupal routes remain relative to the configured base URL, including `/user/login`, `/node/add/{type}`, `/node/{id}/edit`, and `/admin/...`; no DEVV-specific route fork is required. Credentials and optional HTTP Basic Auth values remain local environment variables.
 
 ## Commands
 
@@ -93,11 +95,11 @@ when its automation-owned dependency cannot be proven safely.
 Every successful run creates one uniquely titled `QA-AUTOMATED-` Draft node per
 content type and updates that exact node once. Nodes are intentionally retained
 and never deleted by the suite. `DRUPAL_ENVIRONMENT` must be explicitly set to
-`develop` or `staging`; missing, unknown, and production-like values stop the
-command before browser execution.
+`develop` with the exact DEVV root origin; staging, missing, unknown, and
+production-like values stop the command before browser execution.
 
 Insight and Insight (external) require the exact Image media fixture
-`qa-automated-image.png` with media ID `44706`. Normal regression execution only
+`qa-automated-image.png` with media ID `44801`. Normal regression execution only
 resolves and selects this fixture; it never uploads media. If it is unavailable,
 run the explicit setup command:
 
@@ -106,7 +108,7 @@ npm run setup:media
 ```
 
 Regular Insight also requires the persistent automation-owned Author node
-`24951`. Its exact title and ownership prefix are verified read-only before the
+`24961`. Its exact title and ownership prefix are verified read-only before the
 Insight creation form is opened. The Author created by the suite is independent
 and is not substituted for this fixture.
 
@@ -131,6 +133,10 @@ Generated reports are local test artifacts and should not be committed. Failed
 tests retain their Playwright trace and video, and capture a screenshot. The
 historical `insight-update-recovery.spec.ts`, authentication checks, inventories,
 fixture setup, and other non-CRUD tests are excluded from this command.
+
+Created QA nodes are intentionally retained for verification. This project does
+not currently implement automatic node cleanup, and the DEVV migration does not
+change that policy.
 
 Each CRUD spec remains independently executable, for example:
 
@@ -176,7 +182,7 @@ Milestone 2 adds a separate focused suite for Formatted text (w/ image
 background). It creates one owned Draft host, inserts the exact automation-owned
 `qa-automated-image.png` fixture, saves and verifies text/media persistence,
 updates only the Paragraph text, preserves the same media, saves again, and
-verifies final persistence. The current develop fixture is media `44706`, but
+verifies final persistence. The current DEVV fixture is media `44801`, but
 the ID is never treated as universal: Media Library must first resolve exactly
 one filename match before the expected ID is accepted.
 
@@ -335,10 +341,10 @@ HTTP error or Drupal fatal page after publication.
 Drupal content types with required Image media use the permanent automation-owned
 fixture at `fixtures/qa-automated-image.png`. This Drupal project derives the
 immutable Image media label from the filename, so the expected exact Media Library
-label is `qa-automated-image.png` (media ID `44706` in the current environment).
+label is `qa-automated-image.png` (media ID `44801` in DEVV).
 Future fixture filenames should carry the `QA-AUTOMATED-` prefix directly.
 
-Regular Insight automation also uses the permanent Author fixture node `24951`,
+Regular Insight automation also uses the permanent Author fixture node `24961`,
 whose exact owned title is verified read-only before use. Required entity-reference
 autocomplete fields must resolve an exact label and persisted numeric entity ID;
 they never fall back to the first or a partial match.

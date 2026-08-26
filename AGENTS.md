@@ -54,3 +54,5 @@
 - Write suites must create their own uniquely titled `QA-AUTOMATED-` host and must never mutate historical regression nodes.
 - Never force-click, synthesize DOM events, invoke Drupal AJAX directly, or bypass semantic saved-Paragraph activation.
 - Never automatically rerun a write suite after a failure.
+- Permit Drupal writes only when `DRUPAL_ENVIRONMENT=develop` and the configured root origin is exactly `https://devv.leidos.com` over HTTPS.
+- Reject production, alternate hosts, lookalike subdomains, ports, credentials-in-URL, path-prefixed targets, query strings, and fragments before browser write execution.

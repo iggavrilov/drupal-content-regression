@@ -4,7 +4,7 @@ export type DrupalEnvironmentName = 'develop' | 'staging' | 'production';
 
 export interface EnvironmentConfig {
   name: DrupalEnvironmentName;
-  baseUrl?: string;
+  baseUrl: string;
 }
 
 export function getRequiredEnvironmentVariable(name: string): string {
@@ -30,8 +30,16 @@ export function getEnvironmentConfig(): EnvironmentConfig {
     throw new Error(`Unsupported DRUPAL_ENVIRONMENT: ${configuredName}`);
   }
 
+  const configuredBaseUrl = getRequiredEnvironmentVariable('DRUPAL_BASE_URL');
+  let baseUrl: URL;
+  try {
+    baseUrl = new URL(configuredBaseUrl);
+  } catch {
+    throw new Error('DRUPAL_BASE_URL must be a valid absolute URL.');
+  }
+
   return {
     name: configuredName as DrupalEnvironmentName,
-    baseUrl: process.env.DRUPAL_BASE_URL || undefined,
+    baseUrl: baseUrl.href.replace(/\/$/, ''),
   };
 }

@@ -11,4 +11,6 @@ test('Drupal user can authenticate', async ({ page }) => {
 
   expect(result.authenticated).toBe(true);
   expect(result.finalUrl).toBe(page.url());
+  const finalUrl = new URL(result.finalUrl);
+  console.log(`Drupal authentication final URL: ${finalUrl.origin}${finalUrl.pathname}`);
 });

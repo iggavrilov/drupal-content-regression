@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { AUTOMATED_CONTENT_PREFIX, hasAutomatedContentPrefix } from '../../config/automation';
+import { AUTOMATED_CONTENT_PREFIX, hasAutomatedContentPrefix, PROTECTED_DEVV_NODE_IDS } from '../../config/automation';
 import { insightSearchConfig } from '../../config/content-types';
 import { assertExplicitNonProductionEnvironment } from '../../config/write-safety';
 import { assertNoDrupalFatalPage, NetworkMonitor } from '../../diagnostics/network-monitor';
@@ -10,8 +10,6 @@ import type { ParagraphConfig } from './paragraph-types';
 import type { ParagraphM3Activation, ParagraphM3Result } from './paragraph-m3-types';
 
 const BLOCKQUOTE: ParagraphConfig = { machineName: 'blockquote', label: 'Blockquote', handler: 'ckeditor', fieldMachineName: 'field_blockquote_text' };
-const PROTECTED_NODE_IDS = new Set(['24971', '24976', '24981', '24986', '24991', '24996', '25001', '25011', '25016', '25021']);
-
 interface OptionalDefaults {
   textFormat: string;
   border: string;
@@ -47,7 +45,7 @@ export class ParagraphM3Runner {
       await this.assertDraftAndTitle(form, title);
       await this.save(page, form, 'Milestone 3 initial Save');
       nodeId = nodeIdFromUrl(page.url()) ?? await nodeIdFromEditLink(page);
-      if (!nodeId || !/^\d+$/.test(nodeId) || PROTECTED_NODE_IDS.has(nodeId)) throw new Error('Milestone 3 host save did not resolve one safe new numeric node ID.');
+      if (!nodeId || !/^\d+$/.test(nodeId) || PROTECTED_DEVV_NODE_IDS.has(nodeId)) throw new Error('Milestone 3 host save did not resolve one safe new numeric node ID.');
 
       let persistedDelta = await this.openOwnedEdit(page, nodeId, title);
       let editForm = await this.exactForm(page);
@@ -185,7 +183,7 @@ export class ParagraphM3Runner {
   }
 
   private async openOwnedEdit(page: Page, nodeId: string, title: string): Promise<string> {
-    if (PROTECTED_NODE_IDS.has(nodeId)) throw new Error(`Refusing protected node ${nodeId}.`);
+    if (PROTECTED_DEVV_NODE_IDS.has(nodeId)) throw new Error(`Refusing protected node ${nodeId}.`);
     const response = await page.goto(`/node/${nodeId}/edit`, { waitUntil: 'domcontentloaded' });
     if (!response || response.status() >= 400) throw new Error(`Milestone 3 edit form failed with HTTP ${response?.status() ?? 'unknown'}.`);
     this.monitor.assertNoServerErrors();

@@ -88,19 +88,30 @@ async function findExactMedia(
   dialog: Locator,
   exactName: string,
 ): Promise<AutomationMediaMatch[]> {
-  const filter = dialog.locator('input[name="name"]');
-  if ((await filter.count()) !== 1) {
+  const legacyFilter = dialog.locator('input[name="name"]');
+  const devvFilter = dialog.getByRole('textbox', { name: 'Search', exact: true });
+  const filter = (await legacyFilter.count()) === 1 ? legacyFilter : devvFilter;
+  if ((await filter.count()) !== 1 || !(await filter.isVisible())) {
     throw new Error('Media Library exact-name filter was not found uniquely.');
   }
   await filter.fill(exactName);
   await applyMediaFilters(page, dialog);
 
   const matches = new Map<string, AutomationMediaMatch>();
+  const seenPageSignatures = new Set<string>();
+  let pagesInspected = 0;
   for (;;) {
+    pagesInspected += 1;
+    if (pagesInspected > 20) {
+      throw new Error('Media Library exact-name search exceeded the safe pagination limit.');
+    }
     const currentDialog = await visibleMediaDialog(page);
     const checkboxes = currentDialog.locator(
       'input[type="checkbox"][name^="media_library_select_form["]',
     );
+    const pageSignature = (await checkboxes.evaluateAll((elements) => elements.map((element) => element.getAttribute('name') ?? '').join('|')));
+    if (seenPageSignatures.has(pageSignature)) break;
+    seenPageSignatures.add(pageSignature);
     for (let index = 0; index < (await checkboxes.count()); index += 1) {
       const checkbox = checkboxes.nth(index);
       const checkboxName = await checkbox.getAttribute('name');
@@ -117,8 +128,10 @@ async function findExactMedia(
     }
     const next = currentDialog.getByRole('link', { name: /next page/i }).first();
     if (!(await next.isVisible())) break;
+    const disabled = await next.evaluate((element) => element.getAttribute('aria-disabled') === 'true' || Boolean(element.closest('.is-disabled, [aria-disabled="true"]')));
+    if (disabled) break;
     await next.click();
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(750);
   }
   return [...matches.values()];
 }
@@ -339,9 +352,9 @@ async function visibleMediaDialog(page: Page): Promise<Locator> {
 }
 
 async function applyMediaFilters(page: Page, dialog: Locator): Promise<void> {
-  const apply = dialog.getByRole('button', { name: 'Apply filters', exact: true }).or(
-    dialog.locator('input[type="submit"][value="Apply filters"]'),
-  ).first();
+  const apply = dialog.getByRole('button', { name: /^(?:Apply filters|Apply)$/ }).or(
+    dialog.locator('input[type="submit"][value="Apply filters"], input[type="submit"][value="Apply"]'),
+  ).filter({ visible: true });
   if ((await apply.count()) !== 1) {
     throw new Error('Media Library Apply filters control was not found uniquely.');
   }

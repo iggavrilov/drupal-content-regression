@@ -6,7 +6,7 @@ import { ParagraphM3Runner } from '../src/content/paragraphs/paragraph-m3-runner
 
 test('Milestone 3 Blockquote completes one Draft create/update lifecycle', async ({ page }) => {
   test.setTimeout(300_000);
-  expect(['develop', 'staging']).toContain(assertExplicitNonProductionEnvironment());
+  expect(assertExplicitNonProductionEnvironment()).toBe('develop');
   await loginToDrupal(page, { username: getRequiredEnvironmentVariable('DRUPAL_USERNAME'), password: getRequiredEnvironmentVariable('DRUPAL_PASSWORD') });
   const result = await new ParagraphM3Runner().run(page);
   expect(result.host.nodeCreations).toBe(1);

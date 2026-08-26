@@ -5,6 +5,7 @@ import {
 } from '../config/automation';
 import type { ContentTypeConfig } from '../config/content-types';
 import type { ContentTypeTestData } from '../data/test-data';
+import { assertExplicitNonProductionEnvironment } from '../config/write-safety';
 import {
   assertNoDrupalFatalPage,
   type NetworkMonitor,
@@ -70,6 +71,7 @@ export interface ContentTypeRunResult {
 
 export class ContentTypeRunner {
   async run(context: ContentTypeRunContext): Promise<ContentTypeRunResult> {
+    assertExplicitNonProductionEnvironment();
     const created = await this.create(context);
     const updated = await this.update(context, created.nodeId);
     return { created, updated };

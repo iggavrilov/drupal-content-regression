@@ -15,6 +15,7 @@ import {
   getEnvironmentConfig,
   getRequiredEnvironmentVariable,
 } from '../src/config/environments';
+import { assertExplicitNonProductionEnvironment } from '../src/config/write-safety';
 import {
   assertNoDrupalFatalPage,
   NetworkMonitor,
@@ -22,6 +23,7 @@ import {
 
 test('QA automated Image media fixture exists and can be resolved', async ({ page }) => {
   test.setTimeout(180_000);
+  expect(assertExplicitNonProductionEnvironment()).toBe('develop');
   expect(getEnvironmentConfig().name).not.toBe('production');
   await loginToDrupal(page, {
     username: getRequiredEnvironmentVariable('DRUPAL_USERNAME'),

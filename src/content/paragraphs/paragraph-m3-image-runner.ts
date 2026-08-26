@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { AUTOMATED_CONTENT_PREFIX, AUTOMATED_IMAGE_MEDIA_ID, AUTOMATED_IMAGE_MEDIA_NAME, hasAutomatedContentPrefix } from '../../config/automation';
+import { AUTOMATED_CONTENT_PREFIX, AUTOMATED_IMAGE_MEDIA_ID, AUTOMATED_IMAGE_MEDIA_NAME, hasAutomatedContentPrefix, PROTECTED_DEVV_NODE_IDS } from '../../config/automation';
 import { insightSearchConfig } from '../../config/content-types';
 import { assertExplicitNonProductionEnvironment } from '../../config/write-safety';
 import { assertNoDrupalFatalPage, NetworkMonitor } from '../../diagnostics/network-monitor';
@@ -12,7 +12,6 @@ import type { ParagraphM3Activation } from './paragraph-m3-types';
 import type { ParagraphConfig } from './paragraph-types';
 
 const BLOCKQUOTE: ParagraphConfig = { machineName: 'blockquote', label: 'Blockquote', handler: 'ckeditor', fieldMachineName: 'field_blockquote_text' };
-const PROTECTED_NODE_IDS = new Set(['24971', '24976', '24981', '24986', '24991', '24996', '25001', '25011', '25016', '25021', '25026']);
 interface Defaults { textFormat: string; border: string; color: string }
 
 export class ParagraphM3ImageRunner {
@@ -59,7 +58,7 @@ export class ParagraphM3ImageRunner {
       await this.assertDraftAndTitle(form, title);
       await this.save(page, form, 'Milestone 3 image initial Save');
       nodeId = nodeIdFromUrl(page.url()) ?? await nodeIdFromEditLink(page);
-      if (!nodeId || !/^\d+$/.test(nodeId) || PROTECTED_NODE_IDS.has(nodeId)) throw new Error('Milestone 3 image host save did not resolve one safe new numeric node ID.');
+      if (!nodeId || !/^\d+$/.test(nodeId) || PROTECTED_DEVV_NODE_IDS.has(nodeId)) throw new Error('Milestone 3 image host save did not resolve one safe new numeric node ID.');
 
       let persistedDelta = await this.openOwnedEdit(page, nodeId, title);
       let editForm = await this.exactForm(page);
@@ -185,7 +184,7 @@ export class ParagraphM3ImageRunner {
     if (required) await fillOwnedEditor(form, 'textarea[name="field_insight_lead[0][value]"]', `QA-AUTOMATED Milestone 3 image lead ${runId}`, 'Insight lead');
   }
   private async openOwnedEdit(page: Page, nodeId: string, title: string): Promise<string> {
-    if (PROTECTED_NODE_IDS.has(nodeId)) throw new Error(`Refusing protected node ${nodeId}.`);
+    if (PROTECTED_DEVV_NODE_IDS.has(nodeId)) throw new Error(`Refusing protected node ${nodeId}.`);
     const response = await page.goto(`/node/${nodeId}/edit`, { waitUntil: 'domcontentloaded' });
     if (!response || response.status() >= 400) throw new Error(`Milestone 3 image edit form failed with HTTP ${response?.status() ?? 'unknown'}.`);
     this.monitor.assertNoServerErrors(); await assertNoDrupalFatalPage(page);
