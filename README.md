@@ -62,9 +62,9 @@ npx playwright install chromium
 
 ## Environment setup
 
-Copy `.env.example` to `.env` and populate it locally for the DEVV environment. Never commit `.env` or private values. Automated Drupal node creation now targets `https://devv.leidos.com` through `DRUPAL_BASE_URL`; authentication requires `DRUPAL_USERNAME` and `DRUPAL_PASSWORD`. If the environment is additionally protected by HTTP Basic Auth, set both optional variables `BASIC_AUTH_USERNAME` and `BASIC_AUTH_PASSWORD`; Playwright supplies them at browser-context level.
+Copy `.env.example` to `.env` and populate it locally for an approved development environment. Never commit `.env` or private values. Automated Drupal node creation supports the exact roots `https://devv.leidos.com`, `https://benefits-dev.leidos.com`, `https://dev.qtcm.com`, and `https://dev-cms.leidos.com` through `DRUPAL_BASE_URL`; authentication requires `DRUPAL_USERNAME` and `DRUPAL_PASSWORD`. If the environment is additionally protected by HTTP Basic Auth, set both optional variables `BASIC_AUTH_USERNAME` and `BASIC_AUTH_PASSWORD`; Playwright supplies them at browser-context level.
 
-Write and publishing suites are prohibited on production. Before browser execution, the write guard requires `DRUPAL_ENVIRONMENT=develop` and the exact HTTPS root origin `https://devv.leidos.com`. Alternate hosts, lookalike subdomains, ports, URL credentials, path prefixes, query strings, and fragments fail closed. Static validation is available with `npm run typecheck`.
+Write and publishing suites are prohibited on production. Before browser execution, the write guard requires `DRUPAL_ENVIRONMENT=develop` and one explicitly approved exact HTTPS root. Alternate hosts, lookalike subdomains, ports, URL credentials, path prefixes, query strings, and fragments fail closed. Static validation is available with `npm run typecheck`.
 
 Drupal routes remain relative to the configured base URL, including `/user/login`, `/node/add/{type}`, `/node/{id}/edit`, and `/admin/...`; no DEVV-specific route fork is required. Credentials and optional HTTP Basic Auth values remain local environment variables.
 
@@ -95,11 +95,11 @@ when its automation-owned dependency cannot be proven safely.
 Every successful run creates one uniquely titled `QA-AUTOMATED-` Draft node per
 content type and updates that exact node once. Nodes are intentionally retained
 and never deleted by the suite. `DRUPAL_ENVIRONMENT` must be explicitly set to
-`develop` with the exact DEVV root origin; staging, missing, unknown, and
+`develop` with an explicitly approved root origin; staging, missing, unknown, and
 production-like values stop the command before browser execution.
 
 Insight and Insight (external) require the exact Image media fixture
-`qa-automated-image.png` with media ID `44801`. Normal regression execution only
+`qa-automated-image.png` with media ID `44841`. Normal regression execution only
 resolves and selects this fixture; it never uploads media. If it is unavailable,
 run the explicit setup command:
 
@@ -108,7 +108,7 @@ npm run setup:media
 ```
 
 Regular Insight also requires the persistent automation-owned Author node
-`24961`. Its exact title and ownership prefix are verified read-only before the
+`24981`. Its exact title and ownership prefix are verified read-only before the
 Insight creation form is opened. The Author created by the suite is independent
 and is not substituted for this fixture.
 
@@ -182,7 +182,7 @@ Milestone 2 adds a separate focused suite for Formatted text (w/ image
 background). It creates one owned Draft host, inserts the exact automation-owned
 `qa-automated-image.png` fixture, saves and verifies text/media persistence,
 updates only the Paragraph text, preserves the same media, saves again, and
-verifies final persistence. The current DEVV fixture is media `44801`, but
+verifies final persistence. The current DEVV fixture is media `44841`, but
 the ID is never treated as universal: Media Library must first resolve exactly
 one filename match before the expected ID is accepted.
 
@@ -341,10 +341,10 @@ HTTP error or Drupal fatal page after publication.
 Drupal content types with required Image media use the permanent automation-owned
 fixture at `fixtures/qa-automated-image.png`. This Drupal project derives the
 immutable Image media label from the filename, so the expected exact Media Library
-label is `qa-automated-image.png` (media ID `44801` in DEVV).
+label is `qa-automated-image.png` (media ID `44841` in DEVV).
 Future fixture filenames should carry the `QA-AUTOMATED-` prefix directly.
 
-Regular Insight automation also uses the permanent Author fixture node `24961`,
+Regular Insight automation also uses the permanent Author fixture node `24981`,
 whose exact owned title is verified read-only before use. Required entity-reference
 autocomplete fields must resolve an exact label and persisted numeric entity ID;
 they never fall back to the first or a partial match.
@@ -381,6 +381,22 @@ npx playwright test tests/content-type-inventory.spec.ts --project=chromium
 ```
 
 The inventory is written locally to `test-results/content-type-inventory.json`; it records field/widget structure but no form values or credentials.
+
+CMS-only coverage is isolated under `tests/cms`. Its read-only discovery records the
+actual LENS node/Paragraph relationships and JSON:API resources. The controlled
+regression creates an unpublished `QA-AUTOMATED-CMS-` LENS Presentation with one
+inline LENS Slide and one Card Paragraph linked to an exact QA Image media fixture:
+
+```bash
+npx playwright test tests/cms/authentication.spec.ts --project=chromium --workers=1 --retries=0
+npx playwright test tests/cms/discovery.spec.ts --project=chromium --workers=1 --retries=0
+npx playwright test tests/cms/lens-presentation-regression.spec.ts --project=chromium --workers=1 --retries=0
+```
+
+CMS write execution remains restricted to the exact `https://dev-cms.leidos.com`
+root with `DRUPAL_ENVIRONMENT=develop`. The regression verifies the complete
+Presentation → Slide → Card → Media chain through stable JSON:API UUIDs and does
+not publish or delete the created entities.
 
 Inspect the Basic page creation form without filling or submitting it with:
 

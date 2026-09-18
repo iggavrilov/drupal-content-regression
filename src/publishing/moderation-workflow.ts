@@ -1,10 +1,15 @@
 import type { Locator, Page, Response } from '@playwright/test';
 import type { ContentTypeConfig } from '../config/content-types';
 import { hasAutomatedContentPrefix } from '../config/automation';
-import { getRequiredEnvironmentVariable } from '../config/environments';
+import { applySelectedDrupalTarget, getRequiredEnvironmentVariable, getWorkflowAssigneeConfiguration } from '../config/environments';
 import { isPublishPermissionExpected } from '../config/write-safety';
 import { assertNoDrupalFatalPage, type NetworkMonitor } from '../diagnostics/network-monitor';
 import type { PublishingSourceNode } from './source-nodes';
+import {
+  assertWorkflowPreSubmitGuard,
+  selectExpectedAssigneeCandidate,
+  type AssigneeCandidate,
+} from './workflow-assignee-guard';
 
 export const moderationSelectors = {
   form: 'form.content-moderation-entity-moderation-form, form[id^="content-moderation-entity-moderation-form"]',
@@ -31,6 +36,8 @@ export interface AssignmentControl {
 }
 export interface OwnedNodeModeration {
   form: Locator;
+  transitionSelector: string;
+  submitSelector: string;
   currentState: string;
   options: readonly ModerationOption[];
   logMessageRequired: boolean;
@@ -93,10 +100,11 @@ class PublishingBlockedError extends Error {
 }
 
 function workflowAssigneeConfiguration(): { search: string; expected: string; expectedId: string } {
-  const search = process.env.DRUPAL_WORKFLOW_ASSIGNEE_SEARCH?.trim();
-  const expected = process.env.DRUPAL_WORKFLOW_ASSIGNEE_EXPECTED?.trim();
-  const expectedId = process.env.DRUPAL_WORKFLOW_ASSIGNEE_ID?.trim();
-  if (!search || !expected || !expectedId) throw new PublishingBlockedError('workflow assignee search, expected label, and expected numeric ID are required');
+  const configured = getWorkflowAssigneeConfiguration();
+  const search = configured?.username;
+  const expected = configured?.username;
+  const expectedId = configured?.id;
+  if (!search || !expected || !expectedId) throw new PublishingBlockedError('selected target does not configure a workflow assignee');
   if (!/^\d+$/.test(expectedId)) throw new PublishingBlockedError('configured workflow assignee ID must contain digits only');
   return { search, expected, expectedId };
 }
@@ -105,25 +113,37 @@ function css(value: string): string { return value.replace(/(["\\])/g, '\\$1'); 
 
 async function discoverAssignmentControls(form: Locator): Promise<AssignmentControl[]> {
   const candidates = form.locator('input[name]:not([type="hidden"]):not([type="submit"]), select[name]');
-  const controls: AssignmentControl[] = [];
-  for (let i = 0; i < await candidates.count(); i += 1) {
-    const candidate = candidates.nth(i);
-    const name = (await candidate.getAttribute('name')) ?? '';
-    if (!name || name === 'new_state' || name === 'op') continue;
-    const id = await candidate.getAttribute('id');
-    const label = id ? ((await form.locator(`label[for="${css(id)}"]`).textContent()) ?? '').replace(/\s+/g, ' ').replace(/\*$/, '').trim() : '';
-    if (!/select user/i.test(label)) continue;
-    const tag = await candidate.evaluate((element) => element.tagName.toLowerCase());
-    const widgetType = tag === 'select' ? 'select' : (await candidate.getAttribute('data-autocomplete-path')) ? 'autocomplete' : 'text';
-    controls.push({
+  const discovered = await candidates.evaluateAll((elements) =>
+    elements.map((element) => {
+      const name = element.getAttribute('name') ?? '';
+      const id = element.getAttribute('id');
+      const label = id
+        ? (element.ownerDocument.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent ?? '')
+            .replace(/\s+/g, ' ')
+            .replace(/\*$/, '')
+            .trim()
+        : '';
+      const tag = element.tagName.toLowerCase();
+      return {
+        label,
+        name,
+        tag,
+        hasAutocomplete: element.hasAttribute('data-autocomplete-path'),
+        required:
+          element.hasAttribute('required') ||
+          element.getAttribute('aria-required') === 'true',
+      };
+    }),
+  );
+  return discovered
+    .filter(({ label, name }) => /select user/i.test(label) && name && name !== 'new_state' && name !== 'op')
+    .map(({ label, name, tag, hasAutocomplete, required }) => ({
       label,
       selector: `${tag}[name="${css(name)}"]`,
       name,
-      widgetType,
-      required: (await candidate.getAttribute('required')) !== null || (await candidate.getAttribute('aria-required')) === 'true',
-    });
-  }
-  return controls;
+      widgetType: tag === 'select' ? 'select' : hasAutocomplete ? 'autocomplete' : 'text',
+      required,
+    }));
 }
 
 async function openOwnedNodeView(page: Page, config: ContentTypeConfig, source: PublishingSourceNode): Promise<void> {
@@ -155,6 +175,7 @@ export async function inspectOwnedNodeModeration(
   let form = page.locator(moderationSelectors.form);
   let currentStateSelector: string = moderationSelectors.currentState;
   let transitionSelector: string = moderationSelectors.transition;
+  let submitSelector: string = moderationSelectors.apply;
   if ((await form.count()) === 0) {
     const editResponse = await page.goto(`/node/${source.nodeId}/edit`, { waitUntil: 'domcontentloaded' });
     form = page.locator(config.formSelector);
@@ -164,6 +185,7 @@ export async function inspectOwnedNodeModeration(
     }
     currentStateSelector = '.field--name-moderation-state, [data-drupal-selector*="moderation-state"]';
     transitionSelector = 'select[name="moderation_state[0][state]"]';
+    submitSelector = 'input#edit-submit[name="op"], button#edit-submit[name="op"]';
   }
   if ((await form.count()) !== 1) throw new Error(`${config.label} moderation form was not found uniquely.`);
   const select = form.locator(transitionSelector);
@@ -181,6 +203,8 @@ export async function inspectOwnedNodeModeration(
   if (currentState === 'Published') {
     return {
       form,
+      transitionSelector,
+      submitSelector,
       currentState,
       options,
       logMessageRequired: false,
@@ -190,6 +214,8 @@ export async function inspectOwnedNodeModeration(
   const log = form.locator(moderationSelectors.logMessage);
   return {
     form,
+    transitionSelector,
+    submitSelector,
     currentState,
     options,
     logMessageRequired: (await log.count()) === 1 && ((await log.getAttribute('required')) !== null || (await log.getAttribute('aria-required')) === 'true'),
@@ -204,26 +230,48 @@ async function populateAssignment(page: Page, form: Locator, control: Assignment
   if (control.widgetType === 'select') {
     const values = await field.locator('option').evaluateAll((options, exact) => options.filter((option) => (option.textContent ?? '').replace(/\s+/g, ' ').trim() === exact && !(option as HTMLOptionElement).disabled).map((option) => (option as HTMLOptionElement).value), expected);
     if (values.length !== 1 || !values[0]) throw new PublishingBlockedError(`${control.label} could not resolve the exact configured workflow assignee.`);
+    if (values[0] !== expectedId) throw new PublishingBlockedError(`${control.label} exact assignee label resolved to an unexpected entity ID.`);
     await field.selectOption(values[0]);
     return { suggestionsReturned: values.length, exactMatches: 1, numericTargetIdResolved: true, numericTargetIdMatches: true, usernameMatches: true };
   }
   if (control.widgetType !== 'autocomplete') throw new PublishingBlockedError(`${control.label} uses an unsupported assignment widget.`);
-  await field.fill('');
-  await field.fill(search);
   const suggestions = page.locator('ul.ui-autocomplete:visible li.ui-menu-item');
-  try {
-    await suggestions.first().waitFor({ state: 'visible', timeout: 10_000 });
-  } catch {
-    throw new PublishingBlockedError('workflow assignee search returned no suggestions');
+  let suggestionVisible = false;
+  for (let attempt = 0; attempt < 2 && !suggestionVisible; attempt += 1) {
+    await field.fill('');
+    await field.fill(search);
+    try {
+      await suggestions.first().waitFor({ state: 'visible', timeout: 10_000 });
+      suggestionVisible = true;
+    } catch {
+      if (attempt === 0) await page.waitForTimeout(500);
+    }
   }
-  const labels = await suggestions.evaluateAll((elements) => elements.map((element) => (element.textContent ?? '').replace(/\s+/g, ' ').trim()));
-  console.log(`autocomplete suggestions returned: ${labels.length}`);
-  if (labels.length === 0) throw new PublishingBlockedError('workflow assignee search returned no suggestions');
-  const exactIndexes = labels.map((label, index) => label === expected ? index : -1).filter((index) => index >= 0);
-  console.log(`exact expected matches: ${exactIndexes.length}`);
-  if (exactIndexes.length === 0) throw new PublishingBlockedError('configured expected assignee was not present');
-  if (exactIndexes.length > 1) throw new PublishingBlockedError('configured expected assignee matched more than one result');
-  await suggestions.nth(exactIndexes[0]).click();
+  if (!suggestionVisible) throw new PublishingBlockedError('workflow assignee search returned no suggestions');
+  const candidates = await suggestions.evaluateAll((elements) => elements.map((element) => {
+    const identityElement = element.querySelector('[data-autocomplete-value], [data-value]');
+    const machineValue = identityElement?.getAttribute('data-autocomplete-value')
+      ?? identityElement?.getAttribute('data-value')
+      ?? element.getAttribute('data-autocomplete-value')
+      ?? element.getAttribute('data-value')
+      ?? '';
+    const label = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const identity = /^(.*\S)\s+\((\d+)\)$/.exec(machineValue) ?? /^(.*\S)\s+\((\d+)\)$/.exec(label);
+    return { username: identity?.[1] ?? label, entityId: identity?.[2] };
+  }));
+  console.log(`autocomplete suggestions returned: ${candidates.length}`);
+  if (candidates.length === 0) throw new PublishingBlockedError('workflow assignee search returned no suggestions');
+  let expectedIndex: number;
+  try {
+    expectedIndex = selectExpectedAssigneeCandidate({ username: expected, id: expectedId }, candidates);
+  } catch (error) {
+    throw new PublishingBlockedError(error instanceof Error ? error.message.replace(/^PUBLISHING_BLOCKED:\s*/, '') : 'workflow assignee identity could not be proven');
+  }
+  const exactMatches = candidates.filter((candidate) => candidate.username === expected && (candidate.entityId === undefined || candidate.entityId === expectedId)).length;
+  console.log(`exact expected matches: ${exactMatches}`);
+  await field.focus();
+  for (let index = 0; index <= expectedIndex; index += 1) await field.press('ArrowDown');
+  await field.press('Enter');
   const resolved = (await field.inputValue()).trim();
   const resolvedIdentity = /^(.*\S)\s+\((\d+)\)$/.exec(resolved);
   if (!resolvedIdentity || !/^\d+$/.test(resolvedIdentity[2])) {
@@ -232,13 +280,46 @@ async function populateAssignment(page: Page, form: Locator, control: Assignment
   if (resolvedIdentity[1] !== expected) throw new PublishingBlockedError('resolved assignee username did not equal the exact expected rendered label');
   if (resolvedIdentity[2] !== expectedId) throw new PublishingBlockedError('resolved assignee numeric entity ID did not equal the configured expected ID');
   console.log('numeric target ID resolved: yes');
-  return { suggestionsReturned: labels.length, exactMatches: exactIndexes.length, numericTargetIdResolved: true, numericTargetIdMatches: true, usernameMatches: true };
+  return { suggestionsReturned: candidates.length, exactMatches, numericTargetIdResolved: true, numericTargetIdMatches: true, usernameMatches: true };
+}
+
+async function selectedWorkflowAssignees(form: Locator, controls: readonly AssignmentControl[]): Promise<AssigneeCandidate[]> {
+  const selected: AssigneeCandidate[] = [];
+  for (const control of controls) {
+    const field = form.locator(control.selector);
+    if ((await field.count()) !== 1) throw new PublishingBlockedError(`${control.label} was not found uniquely during final validation.`);
+    if (control.widgetType === 'select') {
+      const option = field.locator('option:checked');
+      const value = await field.inputValue();
+      if (value) selected.push({ username: ((await option.textContent()) ?? '').replace(/\s+/g, ' ').trim(), entityId: value });
+      continue;
+    }
+    const value = (await field.inputValue()).trim();
+    if (!value) continue;
+    const identity = /^(.*\S)\s+\((\d+)\)$/.exec(value);
+    selected.push({ username: identity?.[1] ?? value, entityId: identity?.[2] });
+  }
+  return selected;
+}
+
+async function assertFinalWorkflowSubmissionState(page: Page, form: Locator, assignments: readonly AssignmentControl[]): Promise<void> {
+  try {
+    assertWorkflowPreSubmitGuard({
+      selectedTarget: applySelectedDrupalTarget(),
+      currentOrigin: new URL(page.url()).origin,
+      assigneeRequired: assignments.length > 0,
+      selectedAssignees: await selectedWorkflowAssignees(form, assignments),
+      unresolvedAutocomplete: (await page.locator('ul.ui-autocomplete:visible li.ui-menu-item').count()) > 0,
+    });
+  } catch (error) {
+    throw new PublishingBlockedError(error instanceof Error ? error.message.replace(/^PUBLISHING_BLOCKED:\s*/, '') : 'final workflow-assignee validation failed');
+  }
 }
 
 export async function verifyWorkflowAssigneeReadOnly(page: Page, inspection: OwnedNodeModeration): Promise<WorkflowAssigneeResolution> {
   const controls = inspection.assignmentControls.filter((control) => control.widgetType === 'autocomplete');
   if (controls.length !== 1) throw new PublishingBlockedError('The current moderation form did not expose one unique assignment autocomplete.');
-  const transition = inspection.form.locator(moderationSelectors.transition);
+  const transition = inspection.form.locator(inspection.transitionSelector);
   const originalValue = await transition.inputValue();
   const field = inspection.form.locator(controls[0].selector);
   try {
@@ -262,7 +343,7 @@ export async function diagnoseWorkflowAssigneeReadOnly(page: Page, inspection: O
   const { search } = workflowAssigneeConfiguration();
   const controls = inspection.assignmentControls.filter((control) => control.widgetType === 'autocomplete');
   if (controls.length !== 1) throw new PublishingBlockedError('The current moderation form did not expose one unique assignment autocomplete.');
-  const transition = inspection.form.locator(moderationSelectors.transition);
+  const transition = inspection.form.locator(inspection.transitionSelector);
   const originalValue = await transition.inputValue();
   const field = inspection.form.locator(controls[0].selector);
   try {
@@ -337,8 +418,8 @@ export async function diagnoseWorkflowAssigneeReadOnly(page: Page, inspection: O
   }
 }
 
-async function submitOnce(page: Page, form: Locator, label: string): Promise<Response> {
-  const apply = form.locator(moderationSelectors.apply);
+async function submitOnce(page: Page, form: Locator, label: string, submitSelector: string): Promise<Response> {
+  const apply = form.locator(submitSelector);
   if ((await apply.count()) !== 1) throw new Error(`${label} moderation Apply control was not found uniquely.`);
   const responsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && response.request().isNavigationRequest());
   await apply.click();
@@ -353,12 +434,14 @@ export async function transitionNodeModeration({ page, monitor, config, source, 
 }): Promise<ModerationTransitionResult> {
   const inspection = await inspectOwnedNodeModeration(page, config, source, expectedCurrentState);
   monitor.assertNoServerErrors(); await assertNoDrupalFatalPage(page);
-  const targets = inspection.options.filter((option) => !option.disabled && !option.selected && option.label === targetState);
+  const targets = inspection.options.filter(
+    (option) => !option.disabled && option.label === targetState && option.value,
+  );
   if (targets.length !== 1 || !targets[0].value) {
     const available = inspection.options.filter((option) => !option.disabled && option.value).map((option) => option.label).join(', ') || 'none';
     throw new PublishingBlockedError(`${config.label} does not expose the exact ${expectedCurrentState} → ${targetState} transition; available transitions: ${available}.`);
   }
-  await inspection.form.locator(moderationSelectors.transition).selectOption(targets[0].value);
+  await inspection.form.locator(inspection.transitionSelector).selectOption(targets[0].value);
   const assignments: AssignmentControl[] = [];
   for (const control of await discoverAssignmentControls(inspection.form)) {
     if (control.required || await inspection.form.locator(control.selector).isVisible()) assignments.push(control);
@@ -373,7 +456,8 @@ export async function transitionNodeModeration({ page, monitor, config, source, 
     await log.fill(message);
     logMessageResult = 'populated';
   } else if (inspection.logMessageRequired) throw new PublishingBlockedError(`Required Log message is unavailable for ${expectedCurrentState} → ${targetState}.`);
-  await submitOnce(page, inspection.form, config.label);
+  await assertFinalWorkflowSubmissionState(page, inspection.form, assignments);
+  await submitOnce(page, inspection.form, config.label, inspection.submitSelector);
   monitor.assertNoServerErrors(); await assertNoDrupalFatalPage(page);
   const persisted = await inspectOwnedNodeModeration(page, config, source, targetState);
   monitor.assertNoServerErrors(); await assertNoDrupalFatalPage(page);

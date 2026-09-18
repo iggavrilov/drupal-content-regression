@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { AUTOMATED_CONTENT_PREFIX, AUTOMATED_IMAGE_MEDIA_ID, AUTOMATED_IMAGE_MEDIA_NAME, hasAutomatedContentPrefix, PROTECTED_DEVV_NODE_IDS } from '../../config/automation';
+import { AUTOMATED_CONTENT_PREFIX, AUTOMATED_IMAGE_MEDIA_ID, AUTOMATED_IMAGE_MEDIA_NAME, AUTOMATED_M3_TEXT_NODE_ID, hasAutomatedContentPrefix, PROTECTED_SITE_NODE_IDS } from '../../config/automation';
 import { insightSearchConfig } from '../../config/content-types';
 import { assertExplicitNonProductionEnvironment } from '../../config/write-safety';
 import { assertNoDrupalFatalPage, NetworkMonitor } from '../../diagnostics/network-monitor';
@@ -58,7 +58,7 @@ export class ParagraphM3ImageRunner {
       await this.assertDraftAndTitle(form, title);
       await this.save(page, form, 'Milestone 3 image initial Save');
       nodeId = nodeIdFromUrl(page.url()) ?? await nodeIdFromEditLink(page);
-      if (!nodeId || !/^\d+$/.test(nodeId) || PROTECTED_DEVV_NODE_IDS.has(nodeId)) throw new Error('Milestone 3 image host save did not resolve one safe new numeric node ID.');
+      if (!nodeId || !/^\d+$/.test(nodeId) || PROTECTED_SITE_NODE_IDS.has(nodeId)) throw new Error('Milestone 3 image host save did not resolve one safe new numeric node ID.');
 
       let persistedDelta = await this.openOwnedEdit(page, nodeId, title);
       let editForm = await this.exactForm(page);
@@ -90,7 +90,7 @@ export class ParagraphM3ImageRunner {
           initialPersistedAssociation: 'passed', finalPersistedAssociation: 'passed', optionalFieldsUntouched: 'passed',
           activations: { initialPersistence: this.activationLabel(initialActivation), controlledUpdate: this.activationLabel(updateActivation), finalPersistence: this.activationLabel(finalActivation) },
         },
-        scenarioA: { status: 'previously passed', nodeId: '25026', executed: false },
+        scenarioA: { status: 'previously passed', nodeId: AUTOMATED_M3_TEXT_NODE_ID, executed: false },
         featuredBanner: { status: 'blocked', reason: 'Required field_paragraph_border defaults to invalid _none; Padding has no approved semantic rule.' },
         formattedTextColorBackground: { status: 'blocked', reason: 'Required color selection lacks an approved semantic rule.' },
         serverErrors: this.monitor.getServerErrors().length, fatalPageDetected: false, paragraphAdditions: 1, paragraphRemovals: 0,
@@ -184,7 +184,7 @@ export class ParagraphM3ImageRunner {
     if (required) await fillOwnedEditor(form, 'textarea[name="field_insight_lead[0][value]"]', `QA-AUTOMATED Milestone 3 image lead ${runId}`, 'Insight lead');
   }
   private async openOwnedEdit(page: Page, nodeId: string, title: string): Promise<string> {
-    if (PROTECTED_DEVV_NODE_IDS.has(nodeId)) throw new Error(`Refusing protected node ${nodeId}.`);
+    if (PROTECTED_SITE_NODE_IDS.has(nodeId)) throw new Error(`Refusing protected node ${nodeId}.`);
     const response = await page.goto(`/node/${nodeId}/edit`, { waitUntil: 'domcontentloaded' });
     if (!response || response.status() >= 400) throw new Error(`Milestone 3 image edit form failed with HTTP ${response?.status() ?? 'unknown'}.`);
     this.monitor.assertNoServerErrors(); await assertNoDrupalFatalPage(page);

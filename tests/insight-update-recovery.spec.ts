@@ -40,6 +40,7 @@ const recoveryData: ContentTypeTestData = {
 };
 
 test('existing Insight 24961 can be updated without creating content', async ({ page }) => {
+  test.skip(true, 'Historical recovery target 24961 is no longer automation-owned on DEVV.');
   test.setTimeout(180_000);
   expect(
     getEnvironmentConfig().name,

@@ -59,7 +59,13 @@ test('QA automated Image media fixture exists and can be resolved', async ({ pag
     }
 
     const resolved = await resolveAutomationImageFixture(page, dialog);
-    expect(resolved.id).toBe(AUTOMATED_IMAGE_MEDIA_ID);
+    if (created) {
+      expect(created).toBe(true);
+      expect(resolved.id).toBe(creationDetails?.mediaId);
+    } else {
+      expect(AUTOMATED_IMAGE_MEDIA_ID).not.toBe('');
+      expect(resolved.id).toBe(AUTOMATED_IMAGE_MEDIA_ID);
+    }
     monitor.assertNoServerErrors();
     await assertNoDrupalFatalPage(page);
     console.log(

@@ -24,7 +24,7 @@ export interface ParagraphM3ImageResult {
     optionalFieldsUntouched: 'passed';
     activations: { initialPersistence: ParagraphM3Activation; controlledUpdate: ParagraphM3Activation; finalPersistence: ParagraphM3Activation };
   };
-  scenarioA: { status: 'previously passed'; nodeId: '25026'; executed: false };
+  scenarioA: { status: 'previously passed'; nodeId: string; executed: false };
   featuredBanner: { status: 'blocked'; reason: string };
   formattedTextColorBackground: { status: 'blocked'; reason: string };
   serverErrors: number;

@@ -1,15 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
-import { getEnvironmentConfig } from './src/config/environments';
+import { getEffectiveCredentials, getEnvironmentConfig } from './src/config/environments';
 import { assertExplicitNonProductionEnvironment } from './src/config/write-safety';
 
 assertExplicitNonProductionEnvironment();
 const environment = getEnvironmentConfig();
-const basicAuthUsername = process.env.BASIC_AUTH_USERNAME;
-const basicAuthPassword = process.env.BASIC_AUTH_PASSWORD;
-const httpCredentials =
-  basicAuthUsername && basicAuthPassword
-    ? { username: basicAuthUsername, password: basicAuthPassword }
-    : undefined;
+const credentials = getEffectiveCredentials();
+const httpCredentials = { username: credentials.basicAuthUsername, password: credentials.basicAuthPassword };
 
 const orderedProjects = [
   ['01-basic-page', 'basic-page-crud.spec.ts'],

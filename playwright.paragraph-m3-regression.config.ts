@@ -1,11 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
-import { getEnvironmentConfig } from './src/config/environments';
+import { getEffectiveCredentials, getEnvironmentConfig } from './src/config/environments';
 import { assertExplicitNonProductionEnvironment } from './src/config/write-safety';
 
 assertExplicitNonProductionEnvironment();
 const environment = getEnvironmentConfig();
-const username = process.env.BASIC_AUTH_USERNAME;
-const password = process.env.BASIC_AUTH_PASSWORD;
+const credentials = getEffectiveCredentials();
 
 export default defineConfig({
   testDir: './tests',
@@ -18,7 +17,7 @@ export default defineConfig({
   reporter: [['list'], ['./src/reporting/paragraph-m3-reporter.ts'], ['html', { open: 'never', outputFolder: 'playwright-report/paragraph-m3-regression' }]],
   use: {
     baseURL: environment.baseUrl,
-    httpCredentials: username && password ? { username, password } : undefined,
+    httpCredentials: { username: credentials.basicAuthUsername, password: credentials.basicAuthPassword },
     trace: 'retain-on-failure', screenshot: 'only-on-failure', video: 'retain-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],

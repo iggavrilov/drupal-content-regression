@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { AUTOMATED_CONTENT_PREFIX, AUTOMATED_IMAGE_MEDIA_ID, AUTOMATED_IMAGE_MEDIA_NAME, hasAutomatedContentPrefix, PROTECTED_DEVV_NODE_IDS } from '../../config/automation';
+import { AUTOMATED_CONTENT_PREFIX, AUTOMATED_IMAGE_MEDIA_ID, AUTOMATED_IMAGE_MEDIA_NAME, hasAutomatedContentPrefix, PROTECTED_SITE_NODE_IDS } from '../../config/automation';
 import { insightSearchConfig } from '../../config/content-types';
 import { assertExplicitNonProductionEnvironment } from '../../config/write-safety';
 import { assertNoDrupalFatalPage, NetworkMonitor } from '../../diagnostics/network-monitor';
@@ -54,7 +54,7 @@ export class ParagraphM2Runner {
       await this.assertDraftAndTitle(form, title);
       await this.save(page, form, 'Milestone 2 initial Save');
       nodeId = nodeIdFromUrl(page.url()) ?? await nodeIdFromEditLink(page);
-      if (!nodeId || !/^\d+$/.test(nodeId) || PROTECTED_DEVV_NODE_IDS.has(nodeId)) throw new Error('Milestone 2 host save did not resolve one safe new node ID.');
+      if (!nodeId || !/^\d+$/.test(nodeId) || PROTECTED_SITE_NODE_IDS.has(nodeId)) throw new Error('Milestone 2 host save did not resolve one safe new node ID.');
 
       let persistedDelta = await this.openOwnedEdit(page, nodeId, title);
       const editForm = await this.exactForm(page);
@@ -152,7 +152,7 @@ export class ParagraphM2Runner {
   }
 
   private async openOwnedEdit(page: Page, nodeId: string, title: string): Promise<string> {
-    if (PROTECTED_DEVV_NODE_IDS.has(nodeId)) throw new Error(`Refusing protected node ${nodeId}.`);
+    if (PROTECTED_SITE_NODE_IDS.has(nodeId)) throw new Error(`Refusing protected node ${nodeId}.`);
     const response = await page.goto(`/node/${nodeId}/edit`, { waitUntil: 'domcontentloaded' });
     if (!response || response.status() >= 400) throw new Error(`Milestone 2 edit form failed with HTTP ${response?.status() ?? 'unknown'}.`);
     this.monitor.assertNoServerErrors(); await assertNoDrupalFatalPage(page);

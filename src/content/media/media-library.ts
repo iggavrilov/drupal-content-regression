@@ -88,9 +88,9 @@ async function findExactMedia(
   dialog: Locator,
   exactName: string,
 ): Promise<AutomationMediaMatch[]> {
-  const legacyFilter = dialog.locator('input[name="name"]');
-  const devvFilter = dialog.getByRole('textbox', { name: 'Search', exact: true });
-  const filter = (await legacyFilter.count()) === 1 ? legacyFilter : devvFilter;
+  const filter = dialog
+    .getByRole('textbox', { name: /^(?:Name|Search)$/ })
+    .filter({ visible: true });
   if ((await filter.count()) !== 1 || !(await filter.isVisible())) {
     throw new Error('Media Library exact-name filter was not found uniquely.');
   }
@@ -311,6 +311,28 @@ export async function uploadAutomationImageFixture(
   const save = uploadDialog.getByRole('button', { name: 'Save', exact: true }).or(
     uploadDialog.locator('input[type="submit"][value*="Save" i]'),
   ).filter({ visible: true });
+  if ((await save.count()) === 0) {
+    const autoSelected = uploadDialog.locator(
+      'input[type="checkbox"][name^="media_library_select_form["]:checked',
+    );
+    if ((await autoSelected.count()) === 1) {
+      const checkbox = autoSelected.first();
+      const label = (await checkboxAccessibleName(uploadDialog, checkbox))
+        .replace(/^Select\s+/i, '')
+        .trim();
+      const checkboxName = await checkbox.getAttribute('name');
+      const idMatch = checkboxName?.match(/^media_library_select_form\[(\d+)\]$/);
+      if (label === AUTOMATED_IMAGE_MEDIA_NAME && idMatch) {
+        return {
+          metadataControls,
+          valuesPopulated,
+          mediaId: idMatch[1],
+          mediaEditUrl: `/media/${idMatch[1]}/edit`,
+          published: true,
+        };
+      }
+    }
+  }
   if ((await save.count()) !== 1 || !(await save.isVisible())) {
     throw new Error('Media creation Save control was not found uniquely.');
   }
@@ -363,18 +385,16 @@ async function applyMediaFilters(page: Page, dialog: Locator): Promise<void> {
 }
 
 async function checkboxAccessibleName(
-  dialog: Locator,
+  _dialog: Locator,
   checkbox: Locator,
 ): Promise<string> {
-  const ariaLabel = await checkbox.getAttribute('aria-label');
-  if (ariaLabel) return ariaLabel;
-  const id = await checkbox.getAttribute('id');
-  if (!id) return '';
-  return (
-    (await dialog
-      .locator(`label[for="${cssAttributeEscape(id)}"]`)
-      .textContent()) ?? ''
-  );
+  return checkbox.evaluate((element) => {
+    const ariaLabel = element.getAttribute('aria-label');
+    if (ariaLabel) return ariaLabel;
+    const id = element.getAttribute('id');
+    if (!id) return '';
+    return element.ownerDocument.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent ?? '';
+  });
 }
 
 async function inspectMetadataControls(

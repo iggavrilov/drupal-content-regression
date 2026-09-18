@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Reporter, TestResult } from '@playwright/test/reporter';
+import { AUTOMATED_M3_TEXT_NODE_ID } from '../config/automation';
 import { assertExplicitNonProductionEnvironment } from '../config/write-safety';
 import type { ParagraphM3ImageResult } from '../content/paragraphs/paragraph-m3-image-types';
 
@@ -20,12 +21,12 @@ export default class ParagraphM3ImageReporter implements Reporter {
     if (!this.testResult) return;
     const durationMs = Date.now() - this.startedAt;
     const status = this.testResult.status === 'passed' && this.result ? 'passed' : 'failed';
-    const report = { environment: assertExplicitNonProductionEnvironment(), generatedAt: new Date().toISOString(), status, durationMs, scenarios: { textOnly: { status: 'previously passed', nodeId: '25026', executed: false }, image: this.result }, failure: this.failure };
+    const report = { environment: assertExplicitNonProductionEnvironment(), generatedAt: new Date().toISOString(), status, durationMs, scenarios: { textOnly: { status: 'previously passed', nodeId: AUTOMATED_M3_TEXT_NODE_ID, executed: false }, image: this.result }, failure: this.failure };
     const output = path.resolve(process.cwd(), 'test-results'); fs.mkdirSync(output, { recursive: true });
     fs.writeFileSync(path.join(output, 'paragraph-m3-image-regression-summary.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
     const c = this.result?.component;
     const lines = ['# Drupal Paragraph Milestone 3 Regression', '', `Status: ${status.toUpperCase()}`, `Duration: ${(durationMs / 1000).toFixed(1)}s`, '',
-      'Scenario A — Blockquote text-only: PREVIOUSLY PASSED (node 25026; not executed)', 'Scenario B — Blockquote + optional image: ' + status.toUpperCase(),
+      `Scenario A — Blockquote text-only: PREVIOUSLY PASSED (node ${AUTOMATED_M3_TEXT_NODE_ID}; not executed)`, 'Scenario B — Blockquote + optional image: ' + status.toUpperCase(),
       'Featured banner: BLOCKED / deferred', 'Formatted text (w/ color background): BLOCKED / deferred', '',
       `Node: ${this.result?.host.nodeId ?? this.failure?.nodeId ?? 'not resolved'}`, `Title: ${this.result?.host.title ?? this.failure?.title ?? 'not resolved'}`,
       `Moderation: ${this.result?.host.moderation ?? 'not resolved'}`, `Saves: ${this.result?.host.saves ?? this.failure?.saves ?? 0}`,

@@ -110,6 +110,7 @@ export const basicPageConfig: ContentTypeConfig = {
       type: 'paragraph_ckeditor',
       selector:
         'textarea[name*="[field_formatted_text]"][name$="[value]"]',
+      collapsedEditSelector: 'input[name="field_page_paragraphs_0_edit"], button[name="field_page_paragraphs_0_edit"]',
       optionalOnUpdate: true,
     },
   ],

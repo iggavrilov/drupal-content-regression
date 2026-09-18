@@ -1,26 +1,34 @@
 import 'dotenv/config';
+import { applySelectedDrupalTarget, getWorkflowAssigneeConfiguration } from './environments';
 
 const ALLOWED_WRITE_ENVIRONMENT = 'develop';
-const ALLOWED_WRITE_ORIGIN = 'https://devv.leidos.com';
+const ALLOWED_WRITE_ORIGINS = new Set([
+  'https://devv.leidos.com',
+  'https://benefits-dev.leidos.com',
+  'https://dev.qtcm.com',
+  'https://dev-cms.leidos.com',
+]);
 
-export function assertExplicitNonProductionEnvironment(): string {
-  const configured = process.env.DRUPAL_ENVIRONMENT?.trim().toLowerCase();
+export function assertExplicitNonProductionEnvironment(environmentOverride?: string, baseUrlOverride?: string): string {
+  if (environmentOverride === undefined && baseUrlOverride === undefined) applySelectedDrupalTarget();
+  const configured = (environmentOverride ?? process.env.DRUPAL_ENVIRONMENT)?.trim().toLowerCase();
   if (configured !== ALLOWED_WRITE_ENVIRONMENT) {
     throw new Error(
       'Content regression requires DRUPAL_ENVIRONMENT=develop. Browser execution was stopped.',
     );
   }
-  const configuredBaseUrl = process.env.DRUPAL_BASE_URL?.trim();
+  const configuredBaseUrl = (baseUrlOverride ?? process.env.DRUPAL_BASE_URL)?.trim();
   let target: URL;
   try {
     target = new URL(configuredBaseUrl ?? '');
   } catch {
     throw new Error('Content regression requires a valid absolute DRUPAL_BASE_URL. Browser execution was stopped.');
   }
-  const isCanonicalConfiguredTarget = configuredBaseUrl === ALLOWED_WRITE_ORIGIN
-    || configuredBaseUrl === `${ALLOWED_WRITE_ORIGIN}/`;
+  const allowedOrigin = [...ALLOWED_WRITE_ORIGINS].find((origin) =>
+    configuredBaseUrl === origin || configuredBaseUrl === `${origin}/`);
+  const isCanonicalConfiguredTarget = Boolean(allowedOrigin);
   const isExactRootTarget = isCanonicalConfiguredTarget
-    && target.origin === ALLOWED_WRITE_ORIGIN
+    && target.origin === allowedOrigin
     && target.protocol === 'https:'
     && !target.username
     && !target.password
@@ -28,7 +36,7 @@ export function assertExplicitNonProductionEnvironment(): string {
     && !target.search
     && !target.hash;
   if (!isExactRootTarget) {
-    throw new Error(`Content regression writes are allowed only for ${ALLOWED_WRITE_ORIGIN}. Browser execution was stopped.`);
+    throw new Error(`Content regression writes are allowed only for explicitly approved development origins. Browser execution was stopped.`);
   }
   return configured;
 }
@@ -40,10 +48,11 @@ export function assertPublishingAllowed(): string {
       'PUBLISHING_BLOCKED: DRUPAL_ALLOW_PUBLISH=true is required before publishing browser execution.',
     );
   }
-  if (!process.env.DRUPAL_WORKFLOW_ASSIGNEE_SEARCH?.trim() || !process.env.DRUPAL_WORKFLOW_ASSIGNEE_EXPECTED?.trim() || !process.env.DRUPAL_WORKFLOW_ASSIGNEE_ID?.trim()) {
-    throw new Error('PUBLISHING_BLOCKED: Workflow assignee search, expected label, and expected numeric ID are required before publishing browser execution.');
+  const workflowAssignee = getWorkflowAssigneeConfiguration();
+  if (!workflowAssignee) {
+    throw new Error('PUBLISHING_BLOCKED: The selected target must configure a workflow assignee before publishing browser execution.');
   }
-  if (!/^\d+$/.test(process.env.DRUPAL_WORKFLOW_ASSIGNEE_ID.trim())) {
+  if (!/^\d+$/.test(workflowAssignee.id)) {
     throw new Error('PUBLISHING_BLOCKED: Workflow assignee ID must contain digits only.');
   }
   return environment;
