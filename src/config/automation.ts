@@ -7,6 +7,7 @@ export const AUTOMATED_IMAGE_MEDIA_NAME = 'qa-automated-image.png';
 
 interface SiteAutomationConfig {
   imageMediaId?: string;
+  imageMediaName?: string;
   authorNodeId?: string;
   authorTitle?: string;
   m3TextNodeId?: string;
@@ -14,6 +15,19 @@ interface SiteAutomationConfig {
 }
 
 const SITE_AUTOMATION_CONFIGS: Record<string, SiteAutomationConfig> = {
+  'https://benefits-stage.leidos.com': {
+    imageMediaId: '5921',
+    authorNodeId: '621',
+    authorTitle: "QA-AUTOMATED-BENEFITS-STAGE-Author-20261103-175709-dfae-UPDATED",
+    protectedNodeIds: ['621', '626', '631', '636', '641', '646', '651'],
+  },
+  'https://stage.leidos.com': {
+    imageMediaId: '45406',
+    imageMediaName: 'Two people meeting and shaking hands.jpg',
+    authorNodeId: '25346',
+    authorTitle: 'QA-AUTOMATED-STAGE-Author-20261103-142507-6116-UPDATED',
+    protectedNodeIds: ['25191', '25196', '25201', '25206', '25211', '25216', '25221', '25346', '25351', '25356', '25361', '25366', '25371', '25376'],
+  },
   'https://devv.leidos.com': {
     imageMediaId: '45031',
     authorNodeId: '25051',
@@ -44,6 +58,7 @@ function activeSiteAutomationConfig(): SiteAutomationConfig {
 
 const activeSite = activeSiteAutomationConfig();
 export const AUTOMATED_IMAGE_MEDIA_ID = activeSite.imageMediaId ?? '';
+export const AUTOMATED_REQUIRED_IMAGE_MEDIA_NAME = activeSite.imageMediaName ?? AUTOMATED_IMAGE_MEDIA_NAME;
 export const AUTOMATED_AUTHOR_NODE_ID = activeSite.authorNodeId ?? '';
 export const AUTOMATED_AUTHOR_TITLE = activeSite.authorTitle ?? '';
 export const AUTOMATED_M3_TEXT_NODE_ID = activeSite.m3TextNodeId ?? '';

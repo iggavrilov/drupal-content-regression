@@ -68,6 +68,24 @@ interface OwnedEditor {
   editable?: Locator;
 }
 
+function normalizeEditorText(value: string): string {
+  return value
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(p|div|li|ul|ol|h[1-6]|blockquote|figure|figcaption)[^>]*>/gi, '\n')
+    .replace(/<\/?(strong|b|em|i|u|span|a|code)[^>]*>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\r\n/g, '\n')
+    .replace(/\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function resolveOwnedEditor(
   form: Locator,
   textareaSelector: string,
@@ -84,12 +102,18 @@ async function resolveOwnedEditor(
   const editables = owner.locator(
     '.ck-editor__editable[contenteditable="true"]',
   );
-  if ((await editables.count()) === 1 && (await editables.first().isVisible())) {
-    return { textarea, editable: editables.first() };
+
+  if ((await editables.count()) === 1) {
+    const editable = editables.first();
+    if (await editable.isVisible().catch(() => false)) {
+      return { textarea, editable };
+    }
   }
-  if (await textarea.isVisible()) {
+
+  if (await textarea.isVisible().catch(() => false)) {
     return { textarea };
   }
+
   return undefined;
 }
 
@@ -101,26 +125,22 @@ export async function hasOwnedEditor(
 }
 
 export async function fillOwnedEditor(
-  form: Locator,
-  textareaSelector: string,
-  text: string,
-  fieldLabel: string,
+  form: Locator, textareaSelector: string, text: string, fieldLabel: string,
 ): Promise<void> {
   const editor = await resolveOwnedEditor(form, textareaSelector);
-  if (!editor) {
-    throw new Error(
-      `${fieldLabel} has no uniquely owned visible CKEditor or textarea.`,
-    );
-  }
-
+  if (!editor?.textarea) throw new Error(fieldLabel + ' has no uniquely owned visible editor.');
   if (editor.editable) {
     await editor.editable.fill(text);
-    if ((await editor.editable.innerText()).trim() !== text) {
-      throw new Error(`${fieldLabel} CKEditor did not retain the generated text.`);
+    await editor.editable.press('Tab');
+    if (normalizeEditorText(await editor.editable.innerText()) !== normalizeEditorText(text)) {
+      throw new Error(fieldLabel + ' editor did not retain the generated text.');
     }
     return;
   }
-  await editor.textarea?.fill(text);
+  await editor.textarea.fill(text);
+  if (normalizeEditorText(await editor.textarea.inputValue()) !== normalizeEditorText(text)) {
+    throw new Error(fieldLabel + ' textarea did not retain the generated text.');
+  }
 }
 
 export async function readOwnedEditor(
@@ -128,16 +148,31 @@ export async function readOwnedEditor(
   textareaSelector: string,
   fieldLabel: string,
 ): Promise<string> {
-  const editor = await resolveOwnedEditor(form, textareaSelector);
-  if (!editor) {
+  const editor =
+    (await resolveOwnedEditor(form, textareaSelector)) ?? {
+      textarea: form.locator(textareaSelector),
+    };
+
+  const textarea = editor.textarea;
+  if (!textarea) {
     throw new Error(
-      `${fieldLabel} has no uniquely owned visible CKEditor or textarea.`,
+      `${fieldLabel} has no unique CKEditor or textarea target to read.`,
     );
   }
-  if (editor.editable) {
-    return (await editor.editable.innerText()).trim();
+
+  const textareaCount = await textarea.count();
+  if (textareaCount !== 1) {
+    throw new Error(
+      `${fieldLabel} has no unique CKEditor or textarea target to read.`,
+    );
   }
-  return (await editor.textarea?.inputValue()) ?? '';
+
+  const textareaValue = (await textarea.inputValue()).trim();
+  if (textareaValue) return normalizeEditorText(textareaValue);
+  if (editor.editable) {
+    return normalizeEditorText((await editor.editable.innerText()).trim());
+  }
+  return '';
 }
 
 export async function submitNodeForm(

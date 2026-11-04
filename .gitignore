@@ -1,7 +1,14 @@
 .env
+.tmp/
 node_modules/
 test-results/
+artifacts/console-scan/
+artifacts/admin-ui-scan/
 playwright-report/
 .regression-runs/
 blob-report/
 *.zip
+artifacts/
+.env.*
+!.env.example
+.browser-profiles/

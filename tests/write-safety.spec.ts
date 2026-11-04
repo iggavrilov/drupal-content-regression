@@ -4,17 +4,25 @@ import { ContentTypeRunner } from '../src/content/content-type-runner';
 
 const originalEnvironment = process.env.DRUPAL_ENVIRONMENT;
 const originalBaseUrl = process.env.DRUPAL_BASE_URL;
+const originalTarget = process.env.DRUPAL_TARGET;
+const originalTier = process.env.DRUPAL_TIER;
 
 test.afterEach(() => {
   if (originalEnvironment === undefined) delete process.env.DRUPAL_ENVIRONMENT;
   else process.env.DRUPAL_ENVIRONMENT = originalEnvironment;
   if (originalBaseUrl === undefined) delete process.env.DRUPAL_BASE_URL;
   else process.env.DRUPAL_BASE_URL = originalBaseUrl;
+  if (originalTarget === undefined) delete process.env.DRUPAL_TARGET;
+  else process.env.DRUPAL_TARGET = originalTarget;
+  if (originalTier === undefined) delete process.env.DRUPAL_TIER;
+  else process.env.DRUPAL_TIER = originalTier;
 });
 
 for (const approvedOrigin of [
   'https://devv.leidos.com',
+  'https://stage.leidos.com',
   'https://benefits-dev.leidos.com',
+  'https://benefits-stage.leidos.com',
   'https://dev.qtcm.com',
   'https://dev-cms.leidos.com',
 ] as const) {
@@ -34,6 +42,17 @@ for (const [label, environment, baseUrl] of [
   ['path-prefixed target', 'develop', 'https://devv.leidos.com/drupal'],
   ['query-bearing target', 'develop', 'https://devv.leidos.com/?preview=1'],
   ['fragment-bearing target', 'develop', 'https://devv.leidos.com/#preview'],
+  ['Stage lookalike suffix', 'develop', 'https://stage.leidos.com.evil.example'],
+  ['Stage lookalike subdomain', 'develop', 'https://foo.stage.leidos.com'],
+  ['Stage insecure protocol', 'develop', 'http://stage.leidos.com'],
+  ['Stage alternate port', 'develop', 'https://stage.leidos.com:8443'],
+  ['Stage embedded credentials', 'develop', 'https://user:password@stage.leidos.com'],
+  ['Stage path-prefixed target', 'develop', 'https://stage.leidos.com/admin'],
+  ['Stage query-bearing target', 'develop', 'https://stage.leidos.com/?test=1'],
+  ['Stage fragment-bearing target', 'develop', 'https://stage.leidos.com/#test'],
+  ['Benefits STAGE lookalike suffix', 'develop', 'https://benefits-stage.leidos.com.evil.example'],
+  ['Benefits STAGE insecure protocol', 'develop', 'http://benefits-stage.leidos.com'],
+  ['Benefits STAGE path', 'develop', 'https://benefits-stage.leidos.com/admin'],
   ['Benefits DEV lookalike suffix', 'develop', 'https://benefits-dev.leidos.com.evil.example'],
   ['Benefits DEV lookalike subdomain', 'develop', 'https://foo.benefits-dev.leidos.com'],
   ['Benefits DEV insecure protocol', 'develop', 'http://benefits-dev.leidos.com'],
@@ -67,9 +86,24 @@ for (const [label, environment, baseUrl] of [
 }
 
 test('generic content creation invokes the approved-site write guard before using its context', async () => {
+  // Keep target/tier and base URL coherent so this test exercises the next
+  // fail-closed invariant: the explicit non-production environment guard.
+  process.env.DRUPAL_TARGET = 'leidos';
+  process.env.DRUPAL_TIER = 'stage';
   process.env.DRUPAL_ENVIRONMENT = 'staging';
-  process.env.DRUPAL_BASE_URL = 'https://devv.leidos.com';
+  process.env.DRUPAL_BASE_URL = 'https://stage.leidos.com';
   await expect(new ContentTypeRunner().run(undefined as never)).rejects.toThrow(
     'DRUPAL_ENVIRONMENT=develop',
   );
+});
+
+test('selected target and tier cannot be crossed with another approved origin', () => {
+  const original = { target: process.env.DRUPAL_TARGET, tier: process.env.DRUPAL_TIER, environment: process.env.DRUPAL_ENVIRONMENT, base: process.env.DRUPAL_BASE_URL };
+  try {
+    process.env.DRUPAL_TARGET = 'leidos'; process.env.DRUPAL_TIER = 'stage'; process.env.DRUPAL_ENVIRONMENT = 'develop';
+    process.env.DRUPAL_BASE_URL = 'https://benefits-dev.leidos.com';
+    expect(() => assertExplicitNonProductionEnvironment()).toThrow('conflicts with DRUPAL_BASE_URL');
+  } finally {
+    for (const [key, value] of Object.entries({ DRUPAL_TARGET: original.target, DRUPAL_TIER: original.tier, DRUPAL_ENVIRONMENT: original.environment, DRUPAL_BASE_URL: original.base })) value === undefined ? delete process.env[key] : process.env[key] = value;
+  }
 });

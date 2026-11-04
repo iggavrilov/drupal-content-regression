@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { hasAutomatedContentPrefix } from '../config/automation';
 import { assertExplicitNonProductionEnvironment } from '../config/write-safety';
+import { getEnvironmentConfig } from '../config/environments';
 
 export interface PublishingSourceNode {
   machineName: string;
@@ -13,6 +14,9 @@ export interface PublishingSourceNode {
 
 interface ContentRegressionSourceArtifact {
   environment: string;
+  target: string;
+  tier: string;
+  baseUrl: string;
   generatedAt: string;
   nodes: Array<{
     machineName: string;
@@ -38,6 +42,7 @@ const EXPECTED_MACHINE_NAMES = [
 
 export function loadPublishingSourceNodes(): PublishingSourceNode[] {
   const environment = assertExplicitNonProductionEnvironment();
+  const selected = getEnvironmentConfig();
   const artifactPath = path.resolve(
     process.cwd(),
     '.regression-runs/content-regression-created-nodes.json',
@@ -60,6 +65,9 @@ export function loadPublishingSourceNodes(): PublishingSourceNode[] {
   }
   if (
     summary.environment !== environment ||
+    summary.target !== selected.target ||
+    summary.tier !== selected.tier ||
+    summary.baseUrl !== selected.baseUrl ||
     summary.nodes.length !== EXPECTED_MACHINE_NAMES.length
   ) {
     throw new Error(

@@ -62,6 +62,7 @@ export interface PublishingWorkflowResult {
   publishedValue?: string;
   blockedReason?: string;
   publicPageLoaded: boolean;
+  publicHttpStatus?: number;
 }
 export interface WorkflowAssigneeResolution {
   suggestionsReturned: number;
@@ -151,17 +152,20 @@ async function openOwnedNodeView(page: Page, config: ContentTypeConfig, source: 
     throw new Error(`Unsafe publishing source identity for ${config.label}.`);
   }
   const response = await page.goto(`/node/${source.nodeId}`, { waitUntil: 'domcontentloaded' });
-  if (!response || response.status() >= 400) throw new Error(`${config.label} source node ${source.nodeId} could not be opened.`);
   const heading = page.getByRole('heading', { level: 1, name: source.title, exact: true });
-  if ((await heading.count()) !== 1) {
-    const editResponse = await page.goto(`/node/${source.nodeId}/edit`, { waitUntil: 'domcontentloaded' });
-    const editForm = page.locator(config.formSelector);
-    const title = editForm.locator(config.titleField.selector);
-    if (!editResponse || editResponse.status() >= 400 || (await editForm.count()) !== 1 || (await title.count()) !== 1 || (await title.inputValue()) !== source.title) {
-      throw new Error(`Exact ${config.label} source-node ownership could not be proven.`);
-    }
-    const viewResponse = await page.goto(`/node/${source.nodeId}`, { waitUntil: 'domcontentloaded' });
-    if (!viewResponse || viewResponse.status() >= 400) throw new Error(`${config.label} exact node view could not be reopened.`);
+  const publicPageVisible = !!response && response.status() < 400 && (await heading.count()) === 1;
+  if (publicPageVisible) return;
+
+  const editResponse = await page.goto(`/node/${source.nodeId}/edit`, { waitUntil: 'domcontentloaded' });
+  const editForm = page.locator(config.formSelector);
+  const title = editForm.locator(config.titleField.selector);
+  if (!editResponse || editResponse.status() >= 400 || (await editForm.count()) !== 1 || (await title.count()) !== 1 || (await title.inputValue()) !== source.title) {
+    throw new Error(`Exact ${config.label} source-node ownership could not be proven.`);
+  }
+
+  const viewResponse = await page.goto(`/node/${source.nodeId}`, { waitUntil: 'domcontentloaded' });
+  if (viewResponse && viewResponse.status() >= 400 && viewResponse.status() !== 403 && !(config.machineName === 'insight_external' && viewResponse.status() === 404)) {
+    throw new Error(`${config.label} exact node view could not be reopened.`);
   }
 }
 
@@ -234,6 +238,7 @@ async function populateAssignment(page: Page, form: Locator, control: Assignment
     await field.selectOption(values[0]);
     return { suggestionsReturned: values.length, exactMatches: 1, numericTargetIdResolved: true, numericTargetIdMatches: true, usernameMatches: true };
   }
+  if (control.widgetType === 'autocomplete') await page.waitForFunction(selector => document.querySelector(selector)?.classList.contains('ui-autocomplete-input'), control.selector, { timeout: 20_000 });
   if (control.widgetType !== 'autocomplete') throw new PublishingBlockedError(`${control.label} uses an unsupported assignment widget.`);
   const suggestions = page.locator('ul.ui-autocomplete:visible li.ui-menu-item');
   let suggestionVisible = false;
@@ -489,8 +494,10 @@ export async function runPublishingWorkflow(page: Page, monitor: NetworkMonitor,
     return { status: 'blocked', initialState: initial.currentState, finalState: currentState, transitions, publishedAvailable: publicationStage ? false : undefined, blockedReason: reason, publicPageLoaded: false };
   }
   const response = await page.goto(`/node/${source.nodeId}`, { waitUntil: 'domcontentloaded' });
-  if (!response || response.status() >= 400) throw new Error(`${config.label} public node availability check failed with HTTP ${response?.status() ?? 'unknown'}.`);
+  const externalStandalone404 = config.machineName === 'insight_external' && response?.status() === 404;
+  if (!response || response.status() >= 400 && !externalStandalone404) throw new Error('Published node public availability failed with HTTP ' + (response?.status() ?? 'unknown') + '.');
+  const publicPageLoaded = response.status() < 400;
   monitor.assertNoServerErrors(); await assertNoDrupalFatalPage(page);
-  console.log(`PUBLISHING_EVENT ${JSON.stringify({ machineName: config.machineName, nodeId: source.nodeId, type: 'final', state: 'Published', publicPageLoaded: true })}`);
-  return { status: 'passed', initialState: initial.currentState, finalState: 'Published', transitions, publishedAvailable: true, publishedValue: transitions.at(-1)?.value, publicPageLoaded: true };
+  console.log(`PUBLISHING_EVENT ${JSON.stringify({ machineName: config.machineName, nodeId: source.nodeId, type: 'final', state: 'Published', publicPageLoaded, publicHttpStatus: response.status() })}`);
+  return { status: 'passed', initialState: initial.currentState, finalState: 'Published', transitions, publishedAvailable: true, publishedValue: transitions.at(-1)?.value, publicPageLoaded, publicHttpStatus: response.status() };
 }

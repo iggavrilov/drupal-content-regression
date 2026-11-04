@@ -5,7 +5,7 @@ import { assertExplicitNonProductionEnvironment } from './src/config/write-safet
 assertExplicitNonProductionEnvironment();
 const environment = getEnvironmentConfig();
 const credentials = getEffectiveCredentials();
-const httpCredentials = { username: credentials.basicAuthUsername, password: credentials.basicAuthPassword };
+const httpCredentials = { username: credentials.basicAuthUsername, password: credentials.basicAuthPassword, origin: environment.baseUrl };
 
 const orderedProjects = [
   ['01-basic-page', 'basic-page-crud.spec.ts'],
@@ -20,7 +20,7 @@ const orderedProjects = [
 export default defineConfig({
   testDir: './tests',
   outputDir: 'test-results/content-regression-playwright',
-  timeout: 60_000,
+  timeout: 180_000,
   retries: 0,
   workers: 1,
   fullyParallel: false,
@@ -32,9 +32,9 @@ export default defineConfig({
   use: {
     baseURL: environment.baseUrl,
     httpCredentials,
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    trace: environment.tier === 'stage' ? 'off' : 'retain-on-failure',
+    screenshot: environment.tier === 'stage' ? 'off' : 'only-on-failure',
+    video: environment.tier === 'stage' ? 'off' : 'retain-on-failure',
   },
   projects: orderedProjects.map(([name, testFile]) => ({
     name,

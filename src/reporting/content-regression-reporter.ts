@@ -9,6 +9,7 @@ import type {
   TestResult,
 } from '@playwright/test/reporter';
 import { assertExplicitNonProductionEnvironment } from '../config/write-safety';
+import { getEnvironmentConfig } from '../config/environments';
 
 type RegressionStatus = 'passed' | 'failed' | 'blocked';
 
@@ -135,6 +136,7 @@ export default class ContentRegressionReporter implements Reporter {
   onEnd(_result: FullResult): void {
     if (this.entries.size === 0) return;
     const environment = assertExplicitNonProductionEnvironment();
+    const selected = getEnvironmentConfig();
     const results = orderedTypes.map(([machineName, label]) =>
       this.entries.get(machineName) ?? {
         machineName,
@@ -155,7 +157,7 @@ export default class ContentRegressionReporter implements Reporter {
       total: results.length,
       durationMs: Date.now() - this.startedAt,
     };
-    const report = { environment, generatedAt: new Date().toISOString(), totals, results };
+    const report = { environment, target: selected.target, tier: selected.tier, baseUrl: selected.baseUrl, generatedAt: new Date().toISOString(), totals, results };
     const outputDirectory = path.resolve(process.cwd(), 'test-results');
     fs.mkdirSync(outputDirectory, { recursive: true });
     fs.writeFileSync(
@@ -170,6 +172,9 @@ export default class ContentRegressionReporter implements Reporter {
       `${JSON.stringify(
         {
           environment,
+          target: selected.target,
+          tier: selected.tier,
+          baseUrl: selected.baseUrl,
           generatedAt: report.generatedAt,
           nodes: results
             .filter((entry) => entry.created && entry.nodeId && entry.title)

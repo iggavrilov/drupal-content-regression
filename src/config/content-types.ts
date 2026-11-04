@@ -2,7 +2,7 @@ import {
   AUTOMATED_AUTHOR_NODE_ID,
   AUTOMATED_AUTHOR_TITLE,
   AUTOMATED_IMAGE_MEDIA_ID,
-  AUTOMATED_IMAGE_MEDIA_NAME,
+  AUTOMATED_REQUIRED_IMAGE_MEDIA_NAME,
 } from './automation';
 
 export interface BaseFieldConfig {
@@ -260,7 +260,7 @@ export const insightExternalConfig: ContentTypeConfig = {
     label: 'Image',
     selectionSelector:
       'input[name="field_media_image[selection][0][target_id]"]',
-    expectedName: AUTOMATED_IMAGE_MEDIA_NAME,
+    expectedName: AUTOMATED_REQUIRED_IMAGE_MEDIA_NAME,
     expectedId: AUTOMATED_IMAGE_MEDIA_ID,
   },
   untouchedOptionalFields: [
@@ -308,7 +308,7 @@ export const insightConfig: ContentTypeConfig = {
     label: 'Image',
     selectionSelector:
       'input[name^="field_media_image[selection]"][name$="[target_id]"]',
-    expectedName: AUTOMATED_IMAGE_MEDIA_NAME,
+    expectedName: AUTOMATED_REQUIRED_IMAGE_MEDIA_NAME,
     expectedId: AUTOMATED_IMAGE_MEDIA_ID,
   },
   requiredEntityReferences: [

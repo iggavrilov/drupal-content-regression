@@ -1,32 +1,39 @@
-default_environment: devv
+default_environment: leidos
+default_tier: development
 
 environments:
-  devv:
-    name: "Leidos DEVV"
-    base_url: "https://devv.leidos.com"
-    credentials_profile: default
+  leidos:
+    name: "Leidos"
+    credentials_profile: "default"
     workflow_assignee:
       username: "igor.gavrilov"
       id: 17636
+    urls:
+      development: "https://devv.leidos.com"
+      stage: "https://stage.leidos.com"
 
   benefits:
-    name: "Benefits DEV"
-    base_url: "https://benefits-dev.leidos.com"
-    credentials_profile: default
+    name: "Benefits"
+    credentials_profile: "default"
     workflow_assignee:
       username: "igor.gavrilov"
       id: 15686
+    urls:
+      development: "https://benefits-dev.leidos.com"
+      stage: "https://benefits-stage.leidos.com"
 
   qtcm:
-    name: "QTCM DEV"
-    base_url: "https://dev.qtcm.com"
-    credentials_profile: default
+    name: "QTCM"
+    credentials_profile: "default"
     workflow_assignee:
       username: "igor.gavrilov"
       id: 21
+    urls:
+      development: "https://dev.qtcm.com"
 
   cms:
-    name: "Leidos CMS DEV"
-    base_url: "https://dev-cms.leidos.com"
-    credentials_profile: cms
+    name: "Leidos CMS"
+    credentials_profile: "cms"
     workflow_assignee: null
+    urls:
+      development: "https://dev-cms.leidos.com"

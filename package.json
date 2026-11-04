@@ -19,7 +19,11 @@
     "test:paragraph-m3-blockquote": "playwright test --config=playwright.paragraph-m3-regression.config.ts",
     "test:paragraph-m3-blockquote-image": "playwright test --config=playwright.paragraph-m3-image-regression.config.ts",
     "report": "playwright show-report",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:component-family": "node scripts/component-family.cjs",
+    "test:stage-unit": "playwright test --config=playwright.stage-unit.config.ts",
+    "test:benefits-stage-insights": "playwright test --config=playwright.benefits-stage-insights.config.ts",
+    "test:config-safety": "playwright test tests/environment-config.spec.ts tests/write-safety.spec.ts tests/workflow-assignee-guard.spec.ts --project=chromium --workers=1"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",

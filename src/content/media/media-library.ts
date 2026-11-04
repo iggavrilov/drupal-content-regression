@@ -1,3 +1,4 @@
+import { assertExplicitNonProductionEnvironment } from '../../config/write-safety';
 import path from 'node:path';
 import { expect, type Locator, type Page } from '@playwright/test';
 import {
@@ -37,6 +38,7 @@ export async function openImageMediaLibrary(page: Page): Promise<Locator> {
   if ((await trigger.count()) !== 1) {
     throw new Error('Image Media Library trigger was not found uniquely.');
   }
+  await page.waitForFunction(name => Object.values((window as unknown as { Drupal?: { ajax?: { instances?: Record<string, { element?: HTMLElement }> } } }).Drupal?.ajax?.instances ?? {}).some(ajax => ajax?.element?.getAttribute('name') === name), await trigger.getAttribute('name'), { timeout: 45_000 });
   await trigger.click();
   let dialog = await visibleMediaDialog(page);
   const skip = dialog.getByRole('link', { name: 'Skip', exact: true });
@@ -55,6 +57,7 @@ export async function openImageMediaLibrary(page: Page): Promise<Locator> {
   if ((await selectedSource.count()) !== 1) {
     throw new Error('Media Types/core could not be established as the Media Library source.');
   }
+  await dialog.locator('input[name="name"]').waitFor({ state: 'visible', timeout: 45_000 });
   return dialog;
 }
 
@@ -109,20 +112,29 @@ async function findExactMedia(
     const checkboxes = currentDialog.locator(
       'input[type="checkbox"][name^="media_library_select_form["]',
     );
-    const pageSignature = (await checkboxes.evaluateAll((elements) => elements.map((element) => element.getAttribute('name') ?? '').join('|')));
+    const checkboxRecords = await checkboxes.evaluateAll((elements) => elements.map((element) => {
+      const name = element.getAttribute('name') ?? '';
+      const ariaLabel = element.getAttribute('aria-label');
+      const id = element.getAttribute('id');
+      const label = ariaLabel || (id ? element.ownerDocument.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent : '') || '';
+      const container = element.closest('[data-entity-id], [data-media-id], .media-library-item, .views-row, article');
+      const editHref = container?.querySelector<HTMLAnchorElement>('a[href*="/media/"][href*="/edit"]')?.getAttribute('href') ?? '';
+      const numericId = name.match(/^media_library_select_form\[(\d+)\]$/)?.[1]
+        ?? container?.getAttribute('data-entity-id')?.match(/^\d+$/)?.[0]
+        ?? container?.getAttribute('data-media-id')?.match(/^\d+$/)?.[0]
+        ?? editHref.match(/\/media\/(\d+)\/edit(?:$|[?#])/i)?.[1];
+      return { name, label, numericId };
+    }));
+    const pageSignature = checkboxRecords.map((record) => record.name).join('|');
     if (seenPageSignatures.has(pageSignature)) break;
     seenPageSignatures.add(pageSignature);
-    for (let index = 0; index < (await checkboxes.count()); index += 1) {
-      const checkbox = checkboxes.nth(index);
-      const checkboxName = await checkbox.getAttribute('name');
-      const labelText = await checkboxAccessibleName(currentDialog, checkbox);
-      const displayedName = labelText.replace(/^Select\s+/i, '').trim();
-      const idMatch = checkboxName?.match(/^media_library_select_form\[(\d+)\]$/);
-      if (displayedName === exactName && idMatch && checkboxName) {
-        matches.set(idMatch[1], {
-          id: idMatch[1],
+    for (const record of checkboxRecords) {
+      const displayedName = record.label.replace(/^Select\s+/i, '').trim();
+      if (displayedName === exactName && record.numericId && record.name) {
+        matches.set(record.numericId, {
+          id: record.numericId,
           name: displayedName,
-          checkboxName,
+          checkboxName: record.name,
         });
       }
     }
@@ -158,9 +170,12 @@ export async function resolveAutomationImageFixture(
 export async function selectAutomationImageFixture(
   page: Page,
   expectedId: string,
+  expectedName = AUTOMATED_IMAGE_MEDIA_NAME,
 ): Promise<AutomationMediaMatch> {
   const dialog = await openImageMediaLibrary(page);
-  const media = await resolveAutomationImageFixture(page, dialog);
+  const matches = await findExactMedia(page, dialog, expectedName);
+  if (matches.length !== 1 || matches[0].name !== expectedName) throw new Error('Exact required Image identity was not unique.');
+  const media = matches[0];
   if (media.id !== expectedId) {
     throw new Error(
       `Automation Image fixture resolved to media ${media.id}, expected ${expectedId}.`,
@@ -178,9 +193,7 @@ export async function selectAutomationImageFixture(
     throw new Error('Media Library Insert selected control was not found uniquely.');
   }
   await insert.click();
-  await page.locator(DIALOG_SELECTOR).filter({ visible: true }).waitFor({
-    state: 'hidden',
-  }).catch(() => undefined);
+  await dialog.waitFor({ state: 'hidden', timeout: 45_000 });
   return media;
 }
 
@@ -206,6 +219,29 @@ export async function selectAutomationImageFixtureFromTrigger(
   await insert.click();
   await expect(page.locator(DIALOG_SELECTOR).filter({ visible: true })).toHaveCount(0, { timeout: 15_000 });
   return media;
+}
+
+export async function selectExactExistingMediaFromTrigger(
+  page: Page,
+  trigger: Locator,
+  expectedId: string,
+  expectedName: string,
+): Promise<AutomationMediaMatch> {
+  if (!/^\d+$/.test(expectedId) || !expectedName.trim()) throw new Error('Exact existing media identity is invalid.');
+  if ((await trigger.count()) !== 1 || !(await trigger.isVisible()) || !(await trigger.isEnabled())) throw new Error('Existing media trigger was not uniquely visible and enabled.');
+  await trigger.click();
+  const dialog = await visibleMediaDialog(page);
+  const matches = await findExactMedia(page, dialog, expectedName);
+  const exact = matches.filter((match) => match.id === expectedId && match.name === expectedName);
+  if (matches.length !== 1 || exact.length !== 1) throw new Error(`Existing media ${expectedId} did not resolve as one exact ID-and-name match.`);
+  const checkbox = dialog.locator(`input[name="${exact[0].checkboxName}"]`);
+  if ((await checkbox.count()) !== 1) throw new Error(`Existing media ${expectedId} checkbox was not unique.`);
+  await checkbox.check();
+  const insert = dialog.getByRole('button', { name: 'Insert selected', exact: true }).filter({ visible: true });
+  if ((await insert.count()) !== 1) throw new Error('Media Library Insert selected control was not found uniquely.');
+  await insert.click();
+  await expect(page.locator(DIALOG_SELECTOR).filter({ visible: true })).toHaveCount(0, { timeout: 15_000 });
+  return exact[0];
 }
 
 export async function assertSelectedMediaFixture(
@@ -270,6 +306,7 @@ export async function uploadAutomationImageFixture(
   dialog: Locator,
 ): Promise<CreatedMediaFixture> {
   const upload = dialog.locator('input[name="files[upload]"]');
+  if ((await upload.count()) === 0) return uploadAutomationImageViaAddForm(page);
   if ((await upload.count()) !== 1) {
     throw new Error('Image upload control was not found uniquely.');
   }
@@ -307,10 +344,16 @@ export async function uploadAutomationImageFixture(
       );
     }
   }
+  const uploadedItem = page.getByText(AUTOMATED_IMAGE_MEDIA_NAME, { exact: true }).filter({ visible: true }).last().locator('xpath=ancestor::li[1]');
+  const stageAlt = uploadedItem.getByRole('textbox', { name: /Alternative text/i }).last();
+  if ((await stageAlt.count()) === 1 && !(await stageAlt.inputValue()).trim()) {
+    await stageAlt.fill('QA automated regression test image');
+    await expect(stageAlt).toHaveValue('QA automated regression test image');
+    valuesPopulated.push('Alternative text');
+  }
 
-  const save = uploadDialog.getByRole('button', { name: 'Save', exact: true }).or(
-    uploadDialog.locator('input[type="submit"][value*="Save" i]'),
-  ).filter({ visible: true });
+  const save = page.locator('.ui-dialog-buttonpane').filter({ visible: true })
+    .getByRole('button', { name: 'Save', exact: true }).filter({ visible: true }).last();
   if ((await save.count()) === 0) {
     const autoSelected = uploadDialog.locator(
       'input[type="checkbox"][name^="media_library_select_form["]:checked',
@@ -339,20 +382,9 @@ export async function uploadAutomationImageFixture(
   await save.click();
   await page.waitForTimeout(1_500);
   const createdDialog = await visibleMediaDialog(page);
-  const selected = createdDialog.locator(
-    'input[type="checkbox"][name^="media_library_select_form["]:checked',
-  );
-  if ((await selected.count()) !== 1) {
-    throw new Error(
-      'Media may have been created, but its selected checkbox could not be recovered uniquely.',
-    );
-  }
-  const checkboxName = await selected.getAttribute('name');
-  const idMatch = checkboxName?.match(/^media_library_select_form\[(\d+)\]$/);
-  if (!idMatch) {
-    throw new Error('Created media ID could not be recovered safely.');
-  }
-  const mediaId = idMatch[1];
+  const createdMatches = await findAutomationMedia(page, createdDialog, AUTOMATED_IMAGE_MEDIA_NAME);
+  if (createdMatches.length !== 1) throw new Error('Media may have been created, but its exact numeric identity could not be recovered uniquely.');
+  const mediaId = createdMatches[0].id;
   return {
     metadataControls,
     valuesPopulated,
@@ -368,7 +400,10 @@ export async function closeMediaLibrary(page: Page): Promise<void> {
 }
 
 async function visibleMediaDialog(page: Page): Promise<Locator> {
-  const dialog = page.locator(DIALOG_SELECTOR).filter({ visible: true }).last();
+  const jqueryDialog = page.locator('.ui-dialog').filter({ visible: true }).last();
+  const dialog = (await jqueryDialog.count()) > 0
+    ? jqueryDialog
+    : page.locator('[role="dialog"]').filter({ visible: true }).last();
   await dialog.waitFor({ state: 'visible' });
   return dialog;
 }
@@ -446,4 +481,39 @@ async function inspectMetadataControls(
 
 function cssAttributeEscape(value: string): string {
   return value.replace(/["\\]/g, '\\$&');
+}
+
+/** Normal Drupal Add Image fallback when the picker offers selection only. */
+export async function uploadAutomationImageViaAddForm(page: Page): Promise<CreatedMediaFixture> {
+  assertExplicitNonProductionEnvironment();
+  const response = await page.goto('/media/add/image', { waitUntil: 'domcontentloaded' });
+  const form = page.locator('form.media-image-add-form');
+  if (!response || response.status() !== 200 || await form.count() !== 1) throw new Error('Add Image form is unavailable.');
+  const upload = form.locator('input[name="files[field_media_image_0]"]');
+  if (await upload.count() !== 1) throw new Error('Add Image upload control is not unique.');
+  await upload.setInputFiles(path.resolve(process.cwd(), AUTOMATED_IMAGE_FIXTURE));
+  const alt = form.locator('input[name="field_media_image[0][alt]"]');
+  await alt.waitFor({ state: 'visible', timeout: 45_000 });
+  const fileLabel = await form.locator('.file').innerText();
+  if (!fileLabel.startsWith(path.basename(AUTOMATED_IMAGE_FIXTURE))) throw new Error('Prepared QA image identity mismatch.');
+  await alt.fill('QA automated regression test image');
+  const published = form.locator('input[name="status[value]"]');
+  if (await published.count() !== 1) throw new Error('Image publication control is unavailable.');
+  await published.check();
+  const invalid = await form.locator(':invalid').count();
+  if (invalid) throw new Error('Add Image has unmet required fields; no Save submitted.');
+  const save = form.locator('input[type="submit"][value="Save"]');
+  if (await save.count() !== 1) throw new Error('Add Image Save control is not unique.');
+  const saved = page.waitForResponse(r => r.request().method() === 'POST' && r.request().isNavigationRequest() && new URL(r.url()).pathname === '/media/add/image');
+  await save.click();
+  const savedResponse = await saved;
+  if (savedResponse.status() >= 400) throw new Error('QA media Save failed; inspect persistence before retry.');
+  await page.waitForLoadState('domcontentloaded');
+  await page.goto('/node/add/insight_external', { waitUntil: 'domcontentloaded' });
+  const dialog = await openImageMediaLibrary(page);
+  const media = await resolveAutomationImageFixture(page, dialog);
+  await verifyAutomationImageFixture(page, media.id, AUTOMATED_IMAGE_MEDIA_NAME);
+  const savedStatus = page.locator('form.media-image-edit-form input[name="status[value]"]');
+  if (await savedStatus.count() !== 1 || !await savedStatus.isChecked()) throw new Error('Saved QA Image is not Published; retain it and do not upload again.');
+  return { metadataControls: [], valuesPopulated: ['Alternative text', 'Published'], mediaId: media.id, mediaEditUrl: '/media/' + media.id + '/edit', published: true };
 }

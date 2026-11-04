@@ -3,7 +3,7 @@ import { getEffectiveCredentials, getEnvironmentConfig } from './src/config/envi
 
 const environment = getEnvironmentConfig();
 const credentials = getEffectiveCredentials();
-const httpCredentials = { username: credentials.basicAuthUsername, password: credentials.basicAuthPassword };
+const httpCredentials = { username: credentials.basicAuthUsername, password: credentials.basicAuthPassword, origin: environment.baseUrl };
 
 export default defineConfig({
   testDir: './tests',
@@ -14,9 +14,9 @@ export default defineConfig({
   use: {
     baseURL: environment.baseUrl,
     httpCredentials,
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    trace: environment.tier === 'stage' ? 'off' : 'retain-on-failure',
+    screenshot: environment.tier === 'stage' ? 'off' : 'only-on-failure',
+    video: environment.tier === 'stage' ? 'off' : 'retain-on-failure',
   },
   projects: [
     {

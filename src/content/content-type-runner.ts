@@ -112,6 +112,7 @@ export class ContentTypeRunner {
       const media = await selectAutomationImageFixture(
         page,
         config.requiredMedia.expectedId,
+        config.requiredMedia.expectedName,
       );
       mediaId = media.id;
       await assertSelectedMediaFixture(

@@ -4,13 +4,19 @@ import { applySelectedDrupalTarget, getWorkflowAssigneeConfiguration } from './e
 const ALLOWED_WRITE_ENVIRONMENT = 'develop';
 const ALLOWED_WRITE_ORIGINS = new Set([
   'https://devv.leidos.com',
+  'https://stage.leidos.com',
   'https://benefits-dev.leidos.com',
+  'https://benefits-stage.leidos.com',
   'https://dev.qtcm.com',
   'https://dev-cms.leidos.com',
 ]);
 
 export function assertExplicitNonProductionEnvironment(environmentOverride?: string, baseUrlOverride?: string): string {
-  if (environmentOverride === undefined && baseUrlOverride === undefined) applySelectedDrupalTarget();
+  const configuredBeforeResolution = process.env.DRUPAL_BASE_URL?.trim();
+  const selected = environmentOverride === undefined && baseUrlOverride === undefined ? applySelectedDrupalTarget() : undefined;
+  if (selected && configuredBeforeResolution && configuredBeforeResolution !== selected.baseUrl && configuredBeforeResolution !== `${selected.baseUrl}/`) {
+    throw new Error('Content regression target/tier selection conflicts with DRUPAL_BASE_URL. Browser execution was stopped.');
+  }
   const configured = (environmentOverride ?? process.env.DRUPAL_ENVIRONMENT)?.trim().toLowerCase();
   if (configured !== ALLOWED_WRITE_ENVIRONMENT) {
     throw new Error(
@@ -36,7 +42,10 @@ export function assertExplicitNonProductionEnvironment(environmentOverride?: str
     && !target.search
     && !target.hash;
   if (!isExactRootTarget) {
-    throw new Error(`Content regression writes are allowed only for explicitly approved development origins. Browser execution was stopped.`);
+    throw new Error(`Content regression writes are allowed only for explicitly approved origins. Browser execution was stopped.`);
+  }
+  if (selected && selected.baseUrl !== allowedOrigin) {
+    throw new Error('Content regression target/tier resolution does not match the approved write origin. Browser execution was stopped.');
   }
   return configured;
 }

@@ -1,5 +1,6 @@
 import { AUTOMATED_CONTENT_PREFIX } from '../config/automation';
 import type { ContentTypeConfig } from '../config/content-types';
+import { applySelectedDrupalTarget } from '../config/environments';
 
 export interface ContentTypeTestData {
   runId: string;
@@ -13,7 +14,8 @@ export function generateConfiguredTestData(
   const runId = generateRunId();
   const createValues: Record<string, string> = {};
   const updateValues: Record<string, string> = {};
-  const title = `${AUTOMATED_CONTENT_PREFIX}${config.testData.titleSegment}-${runId}`;
+  const stageSegment = applySelectedDrupalTarget().tier === 'stage' ? 'STAGE-' : '';
+  const title = `${AUTOMATED_CONTENT_PREFIX}${stageSegment}${config.testData.titleSegment}-${runId}`;
   createValues[config.testData.titleKey] = title;
   updateValues[config.testData.titleKey] = `${title}-UPDATED`;
 
