@@ -29,6 +29,28 @@ export interface BasicPageFormattedTextPocResult {
   frontendVerified: true;
 }
 
+export interface LeidosStageBasicPageDemoResult {
+  nodeId: string;
+  title: string;
+  editUrl: string;
+  publicUrl: string;
+  components: readonly ['Formatted text', 'Blockquote', 'List'];
+  markers: {
+    formattedText: string;
+    blockquote: string;
+    list: readonly [string, string, string];
+  };
+  published: true;
+  frontendVerified: true;
+}
+
+export interface LeidosStageBasicPageDemoStep {
+  name: 'created' | 'components-saved' | 'published' | 'frontend-verified';
+  nodeId: string;
+  title: string;
+  url: string;
+}
+
 export type CreatedBasicPageFormattedTextPoc = Omit<BasicPageFormattedTextPocResult, 'publicUrl' | 'paragraphIdentity' | 'frontendVerified'>;
 
 export interface ExistingBasicPageBlockquotePoc {
@@ -383,6 +405,132 @@ function pocData(): ContentTypeTestData {
 }
 
 export class BasicPageFormattedTextPocRunner {
+  async createLeidosStageDemo(
+    page: Page,
+    monitor: NetworkMonitor,
+    onStep?: (step: LeidosStageBasicPageDemoStep) => Promise<void>,
+    publicPage: Page = page,
+  ): Promise<LeidosStageBasicPageDemoResult> {
+    const environment = getEnvironmentConfig();
+    if (environment.target !== 'leidos' || environment.tier !== 'stage' || environment.baseUrl !== 'https://stage.leidos.com') {
+      throw new Error('COMPONENT_DEMO_BLOCKED: This write-enabled demo is allowed only for exact Leidos STAGE.');
+    }
+    if (process.env.LEIDOS_STAGE_BASIC_PAGE_DEMO?.trim() !== 'CREATE_ONE_PUBLISHED_PAGE') {
+      throw new Error('COMPONENT_DEMO_BLOCKED: Explicit single-page demo opt-in is missing.');
+    }
+    assertPublishingAllowed();
+
+    // Read-only permission and component-availability gate before the first content write.
+    const preflight = await page.goto('/node/add/page', { waitUntil: 'domcontentloaded' });
+    if (!preflight || preflight.status() >= 400) {
+      throw new Error(`COMPONENT_DEMO_BLOCKED: Basic Page creation form returned HTTP ${preflight?.status() ?? 'unknown'}.`);
+    }
+    const preflightForm = page.locator('form.node-page-form, form[id^="node-page-form"]').filter({ visible: true });
+    if ((await preflightForm.count()) !== 1) throw new Error('COMPONENT_DEMO_BLOCKED: Basic Page creation permission/form was not uniquely available.');
+    const preflightWrapper = preflightForm.locator(BASIC_PAGE_PARAGRAPH_WRAPPER);
+    for (const [machineName, label] of [['formatted_text', 'Formatted text'], ['blockquote', 'Blockquote'], ['list', 'List']] as const) {
+      if ((await preflightWrapper.locator(`input[name="${BASIC_PAGE_PARAGRAPH_FIELD}_${machineName}_add_more"]`).count()) !== 1) {
+        throw new Error(`COMPONENT_DEMO_BLOCKED: Required Stage Paragraph type ${label} is not available.`);
+      }
+    }
+
+    const runId = `${new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').replace(/\.\d{3}Z$/, '')}-${crypto.randomUUID().slice(0, 4)}`;
+    const title = `${AUTOMATED_CONTENT_PREFIX}QA Automated Demo - Basic Page - ${runId}`;
+    const formattedText = `${AUTOMATED_CONTENT_PREFIX}DEMO-FORMATTED-TEXT-${runId}`;
+    const data: ContentTypeTestData = {
+      runId,
+      createValues: { title, body: formattedText },
+      updateValues: { title, body: formattedText },
+    };
+    const created = await new ContentTypeRunner().create({ page, config: basicPageConfig, data, monitor });
+    if (created.moderation?.moderationStateUsed !== 'Draft') throw new Error('COMPONENT_DEMO_BLOCKED: New Basic Page was not created in Draft.');
+    await onStep?.({ name: 'created', nodeId: created.nodeId, title, url: page.url() });
+
+    const opened = await this.openOwnedBasicPageEdit(page, monitor, { nodeId: created.nodeId, title, formattedTextMarker: formattedText });
+    await this.assertBasicPageInventory(opened.wrapper, 0, 0);
+    const moderation = await validateSafeModerationState(opened.form, basicPageConfig.label);
+    if (!/draft|unpublished/i.test(moderation.moderationStateUsed)) throw new Error('COMPONENT_DEMO_BLOCKED: New page was not safely editable as Draft.');
+
+    const blockquoteDelta = await this.addBasicPageBlockquote(page, opened.wrapper, monitor);
+    const blockquoteDefaults = await this.captureBlockquoteDefaults(opened.wrapper, blockquoteDelta);
+    const blockquote = `${AUTOMATED_CONTENT_PREFIX}DEMO-BLOCKQUOTE-${runId}`;
+    await fillOwnedEditor(opened.wrapper, this.blockquoteTextSelector(blockquoteDelta), blockquote, BLOCKQUOTE_LABEL);
+    await this.assertBlockquoteState(opened.wrapper, blockquoteDelta, blockquote, blockquoteDefaults);
+
+    const listDelta = await this.addBasicPageParagraph(page, opened.wrapper, 'list', 'List', monitor);
+    const list = [1, 2, 3].map((index) => `${AUTOMATED_CONTENT_PREFIX}DEMO-LIST-${runId}-ITEM-${index}`) as [string, string, string];
+    await this.assertListDefaults(opened.wrapper, listDelta);
+    for (let index = 0; index < list.length; index += 1) await this.addListTextItem(page, opened.wrapper, listDelta, index, list[index], monitor);
+    await this.assertBasicPageInventory(opened.wrapper, 1, 1);
+    await this.assertListState(opened.wrapper, listDelta, list);
+    await submitNodeForm(page, opened.form, 'Leidos Stage Basic Page demo component save');
+    monitor.assertNoServerErrors();
+    await assertNoDrupalFatalPage(page);
+    await onStep?.({ name: 'components-saved', nodeId: created.nodeId, title, url: page.url() });
+
+    const persisted = await this.openOwnedBasicPageEdit(page, monitor, { nodeId: created.nodeId, title, formattedTextMarker: formattedText });
+    await this.assertBasicPageInventory(persisted.wrapper, 1, 1);
+    await this.assertExistingBlockquote(persisted.wrapper, blockquote);
+    await this.assertExistingList(persisted.wrapper, list);
+    const persistedModeration = await validateSafeModerationState(persisted.form, basicPageConfig.label);
+    if (!/draft|unpublished/i.test(persistedModeration.moderationStateUsed)) throw new Error('COMPONENT_DEMO_BLOCKED: Saved component revision was not Draft before publishing.');
+
+    const publishing = await runPublishingWorkflow(page, monitor, basicPageConfig, {
+      machineName: basicPageConfig.machineName,
+      label: basicPageConfig.label,
+      nodeId: Number(created.nodeId),
+      title,
+      moderation: 'Draft',
+    });
+    if (publishing.status !== 'passed' || publishing.finalState !== 'Published' || !publishing.publicPageLoaded) {
+      throw new Error(`COMPONENT_DEMO_BLOCKED: Publishing failed${publishing.blockedReason ? `: ${publishing.blockedReason}` : '.'}`);
+    }
+    await onStep?.({ name: 'published', nodeId: created.nodeId, title, url: page.url() });
+
+    const verified = await this.verifyOwnedArticle(publicPage, created.nodeId, title, [
+      { marker: formattedText, selector: '.field--name-field-formatted-text', label: 'Formatted text' },
+      { marker: blockquote, selector: 'blockquote', label: 'Blockquote' },
+      ...list.map((marker, index) => ({ marker, selector: 'ul, ol', label: `List item ${index + 1}` })),
+    ]);
+    await onStep?.({ name: 'frontend-verified', nodeId: created.nodeId, title, url: verified.publicUrl });
+    return {
+      nodeId: created.nodeId,
+      title,
+      editUrl: `${environment.baseUrl}/node/${created.nodeId}/edit`,
+      publicUrl: verified.publicUrl,
+      components: ['Formatted text', 'Blockquote', 'List'],
+      markers: { formattedText, blockquote, list },
+      published: true,
+      frontendVerified: true,
+    };
+  }
+
+  async verifyLeidosStageDemoRecovery(
+    page: Page,
+    monitor: NetworkMonitor,
+    publicPage: Page,
+    expected: { nodeId: string; title: string; runId: string },
+    onStep?: (step: LeidosStageBasicPageDemoStep) => Promise<void>,
+  ): Promise<LeidosStageBasicPageDemoResult> {
+    const environment = getEnvironmentConfig();
+    if (environment.target !== 'leidos' || environment.tier !== 'stage' || environment.baseUrl !== 'https://stage.leidos.com') throw new Error('COMPONENT_DEMO_BLOCKED: Recovery is allowed only on exact Leidos STAGE.');
+    if (!/^\d+$/.test(expected.nodeId) || expected.title !== `${AUTOMATED_CONTENT_PREFIX}QA Automated Demo - Basic Page - ${expected.runId}`) throw new Error('COMPONENT_DEMO_BLOCKED: Recovery identity is not the exact QA demo node.');
+    const formattedText = `${AUTOMATED_CONTENT_PREFIX}DEMO-FORMATTED-TEXT-${expected.runId}`;
+    const blockquote = `${AUTOMATED_CONTENT_PREFIX}DEMO-BLOCKQUOTE-${expected.runId}`;
+    const list = [1, 2, 3].map((index) => `${AUTOMATED_CONTENT_PREFIX}DEMO-LIST-${expected.runId}-ITEM-${index}`) as [string, string, string];
+    const persisted = await this.openOwnedBasicPageEdit(page, monitor, { nodeId: expected.nodeId, title: expected.title, formattedTextMarker: formattedText });
+    await this.assertBasicPageInventory(persisted.wrapper, 1, 1);
+    await this.assertExistingBlockquote(persisted.wrapper, blockquote);
+    await this.assertExistingList(persisted.wrapper, list);
+    const verified = await this.verifyOwnedArticle(publicPage, expected.nodeId, expected.title, [
+      { marker: formattedText, selector: '.field--name-field-formatted-text', label: 'Formatted text' },
+      { marker: blockquote, selector: 'blockquote', label: 'Blockquote' },
+      ...list.map((marker, index) => ({ marker, selector: 'ul, ol', label: `List item ${index + 1}` })),
+    ]);
+    await onStep?.({ name: 'frontend-verified', nodeId: expected.nodeId, title: expected.title, url: verified.publicUrl });
+    return { nodeId: expected.nodeId, title: expected.title, editUrl: `${environment.baseUrl}/node/${expected.nodeId}/edit`, publicUrl: verified.publicUrl, components: ['Formatted text', 'Blockquote', 'List'], markers: { formattedText, blockquote, list }, published: true, frontendVerified: true };
+  }
+
   async createAndPublish(page: Page, monitor: NetworkMonitor): Promise<CreatedBasicPageFormattedTextPoc> {
     const environment = getEnvironmentConfig();
     if (environment.target !== 'devv' || environment.baseUrl !== 'https://devv.leidos.com') {

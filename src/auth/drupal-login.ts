@@ -52,13 +52,14 @@ export async function loginToDrupal(
       (response) =>
         response.request().method() === 'POST' &&
         response.request().isNavigationRequest(),
-    );
+      { timeout: 15_000 },
+    ).catch(() => undefined);
 
     await submitButton.click();
     const loginResponse = await loginResponsePromise;
     await page.waitForLoadState('domcontentloaded');
 
-    if (loginResponse.status() >= 400) {
+    if (loginResponse && loginResponse.status() >= 400) {
       throw new Error(
         `Drupal login request failed with HTTP status ${loginResponse.status()}.`,
       );

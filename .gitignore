@@ -12,3 +12,5 @@ artifacts/
 .env.*
 !.env.example
 .browser-profiles/
+.vscode/
+tests/.tmp-*.spec.ts
